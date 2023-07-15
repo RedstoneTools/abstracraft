@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "abstracraft",
+  "version": "${version}",
+  "name": "abstracraft",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "unlicense",
+  "icon": "assets/abstracraft/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "client": [],
+    "main": []
+  },
+  "mixins": [],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
