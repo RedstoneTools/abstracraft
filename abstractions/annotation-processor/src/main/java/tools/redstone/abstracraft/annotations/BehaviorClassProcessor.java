@@ -88,6 +88,9 @@ public class BehaviorClassProcessor extends AbstractProcessor {
     }
 
     private void createMethodClass(TypeElement behaviorClass, Set<ExecutableElement> methodAndOverloads) {
+        // TODO: Create a separate class for each method/overload, that way
+        //  overloads don't *have* to be implemented for a behavior to work
+
         var behaviorClassName = getClassName(behaviorClass);
         var behaviorClassPackageName = getPackageName(behaviorClass);
         var methodName = getMethodName(methodAndOverloads);

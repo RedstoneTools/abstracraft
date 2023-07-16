@@ -18,6 +18,7 @@ dependencies {
     implementation(project(":annotation-processor"))
     annotationProcessor(project(":annotation-processor"))
 
+    implementation("tools.redstone.abstracraft:helpers")
     implementation("tools.redstone.abstracraft:math")
 }
 
