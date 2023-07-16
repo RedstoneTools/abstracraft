@@ -49,11 +49,30 @@ public class BehaviorClassProcessor extends AbstractProcessor {
     }
 
     private void createMethodClasses(TypeElement behaviorClass) {
+        if (!assertBehaviorClassChecks(behaviorClass)) {
+            return;
+        }
+
         var methodsAndOverloads = getMethodsAndOverloads(behaviorClass);
 
         for (var methodAndOverloads : methodsAndOverloads) {
             createMethodClass(behaviorClass, methodAndOverloads);
         }
+    }
+
+    private boolean assertBehaviorClassChecks(TypeElement behaviorClass) {
+        // Should be public abstract
+        if (!behaviorClass.getModifiers().contains(Modifier.PUBLIC)
+         || !behaviorClass.getModifiers().contains(Modifier.ABSTRACT)) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Classes annotated with @" + BehaviorClass.class.getSimpleName() + " should be public abstract, " + behaviorClass.getSimpleName() + " is not.", behaviorClass);
+
+            return false;
+        }
+
+        // Should only contain protected abstract methods
+        // TODO: Implement this check and refactor this method
+
+        return true;
     }
 
     private Set<Set<ExecutableElement>> getMethodsAndOverloads(TypeElement behaviorClass) {
