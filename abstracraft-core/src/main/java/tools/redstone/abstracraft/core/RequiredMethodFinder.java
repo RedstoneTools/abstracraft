@@ -5,16 +5,11 @@ import org.objectweb.asm.*;
 import java.util.*;
 
 /**
- * Utilizes ASM bytecode analysis to detect required dependencies
- * and automatically register them.
+ * Analyzes bytecode of a class to determine the methods required.
+ *
+ * @author orbyfied
  */
-public class RequiredDependencyFinder {
-
-    public static void transformClass(String name, ClassReader reader, ClassWriter writer) {
-        var detector = new RequiredDependencyFinder(reader);
-        var list = detector.findRequiredDependenciesForClass();
-        detector.auditClassWithDependencies(writer, list);
-    }
+public class RequiredMethodFinder {
 
     /**
      * Analyzes and transforms the given class, registering
@@ -26,22 +21,35 @@ public class RequiredDependencyFinder {
     public static byte[] transformClass(byte[] in) {
         ClassReader reader = new ClassReader(in);
         ClassWriter writer = new ClassWriter(reader, 0);
-        transformClass(reader.getClassName(), reader, writer);
+        var detector = new RequiredMethodFinder(reader);
+        var list = detector.findRequiredDependenciesForClass();
+        detector.auditClassWithDependencies(writer, list);
         return writer.toByteArray();
     }
 
-    //////////////////////////
+    static Map<String, Boolean> isMethodTypeCache = new HashMap<>();
+
+    static boolean isMethodType(String name) {
+        Boolean b = isMethodTypeCache.get(name);
+        if (b != null)
+            return b;
+
+        try {
+            isMethodTypeCache.put(name, b = RawOptionalMethod.class.isAssignableFrom(Class.forName(name)));
+            return b;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
 
     final ClassReader classReader;
 
-    public RequiredDependencyFinder(ClassReader classReader) {
+    public RequiredMethodFinder(ClassReader classReader) {
         this.classReader = classReader;
     }
 
     final List<Type> definedRequired = new ArrayList<>();
 
-    static final Type TYPE_DynamicExtensible = Type.getType(DynamicExtensible.class);
-    static final String NAME_DynamicExtensible = TYPE_DynamicExtensible.getInternalName();
     static final Type TYPE_Optional = Type.getType(Optional.class);
     static final String NAME_Optional = TYPE_Optional.getInternalName();
     static final Type TYPE_Required = Type.getType(Required.class);
@@ -49,6 +57,7 @@ public class RequiredDependencyFinder {
 
     record RequiredDependency(Type dependencyClass) { }
     record MethodInfo(int access, String name, String desc, String signature, String[] exceptions) { }
+    record FieldGet(Type fieldType, String owner, String name) { }
     record InstanceOf(Type type, HashMap<String, Object> flags) {
         public InstanceOf set(String flag, Object val) {
             flags.put(flag, val);
@@ -128,31 +137,8 @@ public class RequiredDependencyFinder {
 
             @Override
             public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
-                // check for DynamicExtensible.require() calls
-                if (NAME_DynamicExtensible.equals(owner) && "require".equals(name) && "(Ljava/lang/Class;)Ljava/lang/Object;".equals(desc)) {
-                    Type dependency = (Type) stack.pop();
-                    list.add(new RequiredDependency(dependency));
-                    stack.push(instanceOf(dependency).set("behavior"));
-                }
-
-                // check for DynamicExtensible.optionally() calls
-                if (NAME_DynamicExtensible.equals(owner) && "optionally".equals(name) && "(Ljava/lang/Class;)Ljava/util/Optional;".equals(desc)) {
-                    Type dependency = (Type) stack.pop();
-                    stack.push(instanceOf(TYPE_Optional)
-                            .set("dependency", dependency));
-                }
-
-                // check for Optional.isPresent() calls
-                if (NAME_Optional.equals(owner) && "isPresent".equals(name)) {
-                    ((InstanceOf)stack.peek()).set("checked", true);
-                }
-
-                // check for Optional.get() calls
-                if (NAME_Optional.equals(owner) && "get".equals(name)) {
-                    InstanceOf instance = (InstanceOf) stack.peek();
-                    if (instance.has("dependency") && instance.get("checked") != Boolean.TRUE) {
-                        list.add(new RequiredDependency(instance.get("dependency")));
-                    }
+                if (isMethodType(owner) && "call".equals(name)) {
+                    list.add(new RequiredDependency(Type.getObjectType(owner)));
                 }
             }
         };
@@ -184,4 +170,3 @@ public class RequiredDependencyFinder {
     }
 
 }
-
