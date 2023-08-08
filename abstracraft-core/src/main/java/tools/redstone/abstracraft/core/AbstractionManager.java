@@ -108,6 +108,12 @@ public class AbstractionManager {
         return implementedByDefault; // todo
     }
 
+    /**
+     * Check whether all given methods are implemented.
+     *
+     * @param methods The methods.
+     * @return Whether they are all implemented.
+     */
     public boolean areAllImplemented(List<MethodInfo> methods) {
         if (methods == null)
             return true;
@@ -119,6 +125,19 @@ public class AbstractionManager {
         }
 
         return true;
+    }
+
+    /**
+     * Check whether all the required given dependencies are implemented.
+     *
+     * @param dependencies The dependencies.
+     * @return Whether they are all implemented.
+     */
+    public boolean areAllRequiredImplemented(List<MethodDependency> dependencies) {
+        return areAllImplemented(dependencies.stream()
+                .filter(d -> !d.optional())
+                .map(MethodDependency::info)
+                .toList());
     }
 
     /**
