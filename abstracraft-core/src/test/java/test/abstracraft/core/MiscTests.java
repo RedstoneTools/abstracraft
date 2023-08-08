@@ -31,24 +31,25 @@ public class MiscTests {
         }
     }
 
+    /* --------------------------------------------------- */
+
     /** Example abstraction */
     public interface Abc extends Abstraction {
-        static Abc impl() {
-            return (Abc) Proxy.newProxyInstance(Abc.class.getClassLoader(), new Class[] { Abc.class }, (proxy, method, args) -> {
-                String name = method.getName();
-                if (name.equals("equals") || name.equals("hashCode")) {
-                    return InvocationHandler.invokeDefault(proxy, method, args);
-                }
-
-                return "Abc#" + method.getName();
-            });
-        }
-
-        String a();
-        String b();
-        String c();
-        String d();
+        default String a() { throw new UnsupportedOperationException(); }
+        default String b() { throw new UnsupportedOperationException(); }
+        default String c() { throw new UnsupportedOperationException(); }
+        default String d() { throw new UnsupportedOperationException(); }
     }
+
+    /** Example impl */
+    public static class AbcImpl implements Abc {
+        @Override
+        public String a() {
+            return "AAAAAA";
+        }
+    }
+
+    /* --------------------------------------------------- */
 
     public interface Tests {
         String testA(Abc abc);
@@ -73,13 +74,9 @@ public class MiscTests {
 
     @Test
     void test_Unimplemented() throws Throwable {
-        ReflectUtil.ensureLoaded(Tests.class); // ensure this is loaded so its not transformed
+        abstractionManager.registerImpl(AbcImpl.class);
 
-        abstractionManager.setImplementedByDefault(false);
-        abstractionManager.setImplemented(MethodInfo.forInfo(Abc.class, "b", String.class), true);
-        abstractionManager.setImplemented(MethodInfo.forInfo(Abc.class, "a", String.class), false);
-
-        Abc abc = Abc.impl();
+        Abc abc = new AbcImpl();
         Tests testInstance = (Tests) abstractionManager.findClass("test.abstracraft.core.MiscTests$TestClass")
                 .newInstance();
 

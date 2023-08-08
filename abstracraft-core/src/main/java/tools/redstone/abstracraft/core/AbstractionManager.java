@@ -4,6 +4,9 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 
 import java.io.InputStream;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,18 +25,12 @@ public class AbstractionManager {
 
     final Predicate<String> abstractionClassPredicate; // The predicate for abstraction class names.
 
-    boolean implementedByDefault = false;                              // Whether it should assume unregistered methods are implemented by default
     final Map<Class<?>, Class<?>> implByBaseClass = new HashMap<>();   // The registered implementation classes by base class
     final Map<MethodInfo, Boolean> implementedCache = new HashMap<>(); // A cache to store whether a specific method is implemented for fast access
 
     final Map<MethodInfo, ClassDependencyAnalyzer.MethodAnalysis> methodAnalysisMap = new HashMap<>(); // All analyzed methods by their descriptor
     final Map<String, ClassDependencyAnalyzer> analyzerMap = new HashMap<>();                          // All analyzers by class name
     final ClassLoader transformingClassLoader;
-
-    public AbstractionManager setImplementedByDefault(boolean implementedByDefault) {
-        this.implementedByDefault = implementedByDefault;
-        return this;
-    }
 
     public AbstractionManager(Predicate<String> abstractionClassPredicate) {
         this.abstractionClassPredicate = abstractionClassPredicate;
@@ -59,10 +56,10 @@ public class AbstractionManager {
      * @param startItf The starting interface.
      * @return The base abstraction class/interface.
      */
-    public Class<?> getBaseAbstractionClass(Class<?> startItf) {
+    public List<Class<?>> getApplicableAbstractionClasses(Class<?> startItf) {
         Class<?> current = startItf;
         outer: while (current != null) {
-            if (current.isAnnotationPresent(BaseAbstraction.class))
+            if (ArrayUtil.anyMatch(current.getInterfaces(), i -> i == Abstraction.class))
                 break;
 
             // find next interface by finding the
@@ -79,7 +76,7 @@ public class AbstractionManager {
 
         if (current == null)
             throw new IllegalArgumentException("Could not find base abstraction for " + startItf);
-        return current;
+        return List.of(current);
     }
 
     /**
@@ -88,10 +85,39 @@ public class AbstractionManager {
      * @param implClass The implementation.
      */
     public void registerImpl(Class<?> implClass) {
-        implByBaseClass.put(
-                getBaseAbstractionClass(implClass),
-                implClass
-        );
+        for (Class<?> kl : getApplicableAbstractionClasses(implClass)) {
+            implByBaseClass.put(kl, implClass);
+        }
+    }
+
+    // Check whether the given method is implemented
+    // without referencing the cache
+    private boolean isImplemented0(MethodInfo method) {
+        // get abstraction class
+        Class<?> abstractionClass = ReflectUtil.getClass(method.ownerClassName());
+        if (abstractionClass == null)
+            return false;
+
+        // get implementation class for abstraction
+        Class<?> implClass = implByBaseClass.get(abstractionClass);
+        if (implClass == null)
+            // object not implemented at all
+            return false;
+
+        try {
+            // check method declaration
+            Method m = implClass.getMethod(method.name(), ASMUtil.asClasses(method.asmType().getArgumentTypes()));
+
+            if (m.isAnnotationPresent(Defaulted.class))
+                return true;
+            if (m.getDeclaringClass() == abstractionClass)
+                return false;
+            if (m.getDeclaringClass().isInterface() && !m.isDefault())
+                return false;
+            return !Modifier.isAbstract(m.getModifiers());
+        } catch (Exception e) {
+            throw new RuntimeException("Error while checking implementation status of " + method, e);
+        }
     }
 
     /**
@@ -105,7 +131,9 @@ public class AbstractionManager {
         Boolean b = implementedCache.get(method);
         if (b != null)
             return b;
-        return implementedByDefault; // todo
+
+        implementedCache.put(method, b = isImplemented0(method));
+        return b;
     }
 
     /**

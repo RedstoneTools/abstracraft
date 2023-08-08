@@ -21,7 +21,7 @@ public record MethodInfo(String ownerInternalName, String ownerClassName, String
     }
 
     public static MethodInfo forInfo(Class<?> klass, String name, Class<?> returnType, Class<?>... argTypes) {
-        Type type = Type.getMethodType(Type.getType(returnType), ASMUtil.getTypes(argTypes));
+        Type type = Type.getMethodType(Type.getType(returnType), ASMUtil.asTypes(argTypes));
         return new MethodInfo(klass.getName().replace('.', '/'), klass.getName(),
                 name, type.getDescriptor(), type);
     }

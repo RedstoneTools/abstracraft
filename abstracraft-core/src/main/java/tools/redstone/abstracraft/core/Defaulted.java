@@ -6,8 +6,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Denotes that the annotated class is the base abstraction class.
+ * Denotes that the method has a default implementation.
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.TYPE)
-public @interface BaseAbstraction { }
+@Target(ElementType.METHOD)
+public @interface Defaulted {
+
+}
