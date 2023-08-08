@@ -478,8 +478,6 @@ public class ClassDependencyAnalyzer {
     public ClassDependencyAnalyzer analyzeAndTransform() {
         classAnalysis = new ClassAnalysis();
 
-//        classNode.accept(new TraceClassVisitor(new PrintWriter(System.out)));
-
         /* find dependencies */
         classNode.accept(new ClassVisitor(ASMV) {
             @Override
@@ -508,7 +506,6 @@ public class ClassDependencyAnalyzer {
                 // filter dependencies
                 classAnalysis.dependencies = classAnalysis.dependencies.stream()
                         .map(d -> d.optional() ? d : d.asOptional(getMethodAnalysis(d.calledIn()).optionalReferenceNumber > 0))
-                        .peek(d -> System.out.println(d.info() + ": " + getMethodAnalysis(d.calledIn()).optionalReferenceNumber))
                         .collect(Collectors.toSet());
 
                 // mark complete
