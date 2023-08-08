@@ -25,4 +25,9 @@ public record MethodInfo(String ownerInternalName, String ownerClassName, String
         return new MethodInfo(klass.getName().replace('.', '/'), klass.getName(),
                 name, type.getDescriptor(), type);
     }
+
+    @Override
+    public String toString() {
+        return ownerClassName + "." + name + desc;
+    }
 }

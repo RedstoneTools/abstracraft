@@ -90,6 +90,27 @@ public class ReflectUtil {
     }
 
     /**
+     * Get the loaded class by the given name.
+     *
+     * @param name The class name.
+     * @param loader The loader to load the class with.
+     * @throws IllegalArgumentException If no class by that name exists.
+     * @return The class.
+     */
+    public static Class<?> getClass(String name, ClassLoader loader) {
+        Class<?> klass = forNameCache.get(name);
+        if (klass != null)
+            return klass;
+
+        try {
+            forNameCache.put(name, klass = Class.forName(name, true, loader));
+            return klass;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Error while finding class by name '" + name + "'", e);
+        }
+    }
+
+    /**
      * Get the bytes of the class file of the given loaded class.
      *
      * @param klass The class.
@@ -302,7 +323,7 @@ public class ReflectUtil {
                         return defineClass(name, bytes, 0, bytes.length);
                     }
                 } catch (Exception e) {
-                    throw new AssertionError(e);
+                    throw new RuntimeException("While loading class " + name, e);
                 }
             }
 

@@ -7,11 +7,10 @@ import tools.redstone.abstracraft.core.*;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
-import java.util.Arrays;
 
 public class MiscTests {
 
-    final AbstractionManager abstractionManager = new AbstractionManager();
+    final AbstractionManager abstractionManager = new AbstractionManager(name -> name.startsWith("test"));
 
     public static void main(String[] args) throws Throwable {
         new MiscTests().test_Unimplemented();
@@ -59,7 +58,7 @@ public class MiscTests {
     /** The class with test code */
     @Disabled
     public static class TestClass implements Tests {
-        String db(Abc abc) {
+        String deep(Abc abc) {
             return abc.c();
         }
 
@@ -68,9 +67,7 @@ public class MiscTests {
         }
 
         public String testB(Abc abc) {
-            return Usage.requireAtLeastOne(() -> {
-                return db(abc);
-            }, abc::c, abc::d);
+            return Usage.requireAtLeastOne(() -> deep(abc), () -> abc.b(), abc::d);
         }
     }
 
@@ -78,16 +75,15 @@ public class MiscTests {
     void test_Unimplemented() throws Throwable {
         ReflectUtil.ensureLoaded(Tests.class); // ensure this is loaded so its not transformed
 
-        ClassLoader loader = MethodDependencyAnalyzer.transformingLoader(
-                n -> n.startsWith("test"),
-                abstractionManager, this.getClass().getClassLoader());
         abstractionManager.setImplementedByDefault(false);
-        abstractionManager.setImplemented(MethodInfo.forInfo(Abc.class, "d", String.class), true);
-        abstractionManager.setImplemented(MethodInfo.forInfo(Abc.class, "a", String.class), true);
+        abstractionManager.setImplemented(MethodInfo.forInfo(Abc.class, "b", String.class), true);
+        abstractionManager.setImplemented(MethodInfo.forInfo(Abc.class, "a", String.class), false);
 
         Abc abc = Abc.impl();
-        Tests testInstance = (Tests) Class.forName("test.abstracraft.core.MiscTests$TestClass", true, loader)
+        Tests testInstance = (Tests) abstractionManager.findClass("test.abstracraft.core.MiscTests$TestClass")
                 .newInstance();
+
+        println("Dependencies: " + abstractionManager.analyzer(testInstance.getClass()).getClassAnalysis().dependencies);
 
         // TEST CODE //
         runSafe(() -> println(testInstance.testA(abc)));

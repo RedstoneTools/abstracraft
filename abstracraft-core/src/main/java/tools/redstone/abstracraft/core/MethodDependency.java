@@ -9,6 +9,10 @@ public record MethodDependency(
         // Details of the call of the method
         MethodInfo calledIn
 ) {
+    public MethodDependency asOptional(boolean opt) {
+        return new MethodDependency(opt, info, calledIn);
+    }
+
     @Override
     public String toString() {
         return "MethodDependency(" + (optional ? "optional " : "required ") +
