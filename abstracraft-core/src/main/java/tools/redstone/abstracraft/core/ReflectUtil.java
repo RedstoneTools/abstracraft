@@ -8,11 +8,15 @@ import sun.misc.Unsafe;
 import java.io.InputStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 /**
  * A utility class for transforming and loading classes.
@@ -27,6 +31,7 @@ public class ReflectUtil {
 
     /* Method handles for cracking  */
     static final MethodHandle SETTER_Field_modifiers;
+    static final MethodHandle ClassLoader_findLoadedClass;
     static final MethodHandles.Lookup INTERNAL_LOOKUP;
 
     static {
@@ -52,7 +57,8 @@ public class ReflectUtil {
                         );
             }
 
-            SETTER_Field_modifiers  = INTERNAL_LOOKUP.findSetter(Field.class, "modifiers", Integer.TYPE);
+            SETTER_Field_modifiers = INTERNAL_LOOKUP.findSetter(Field.class, "modifiers", Integer.TYPE);
+            ClassLoader_findLoadedClass = INTERNAL_LOOKUP.findVirtual(ClassLoader.class, "findLoadedClass", MethodType.methodType(Class.class, String.class));
         } catch (Throwable t) {
             // throw exception in init
             throw new ExceptionInInitializerError(t);
@@ -225,22 +231,99 @@ public class ReflectUtil {
         void transform(String name, ClassReader reader, ClassWriter writer);
     }
 
-    public static ClassLoader transformingClassLoader(ClassTransformer transformer) {
-        return transformingClassLoader(ClassLoader.getSystemClassLoader(), transformer);
+    /**
+     * Find the loaded class lowest in the chain of class loaders.
+     *
+     * @param loader The loader.
+     * @param name The class name.
+     * @return The loaded class or null if unloaded.
+     */
+    public static Class<?> findLoadedClass(ClassLoader loader, String name) {
+        try {
+            while (loader != null) {
+                Class<?> klass = (Class<?>) ClassLoader_findLoadedClass.invoke(loader, name);
+                if (klass != null) {
+//                    System.out.println("found loaded class " + name + " in loader " + loader);
+                    return klass;
+                }
+
+                loader = loader.getParent();
+            }
+
+            return null;
+        } catch (Throwable t) {
+            t.printStackTrace();
+            return null;
+        }
     }
 
-    public static ClassLoader transformingClassLoader(ClassLoader loader,
-                                                      ClassTransformer transformer) {
-        return new ClassLoader(loader) {
+    /** Black hole for class objects */
+    public static boolean ensureLoaded(Class<?> klass) {
+        if (klass == null) return false;
+        return klass.hashCode() != 0;
+    }
+
+    public static ClassLoader transformingClassLoader(Predicate<String> namePredicate,
+                                                      ClassTransformer transformer,
+                                                      int writerFlags) {
+        return transformingClassLoader(namePredicate, ClassLoader.getSystemClassLoader(), transformer, writerFlags);
+    }
+
+    public static ClassLoader transformingClassLoader(Predicate<String> namePredicate,
+                                                      ClassLoader parent,
+                                                      ClassTransformer transformer,
+                                                      int writerFlags) {
+        return new ClassLoader(parent) {
+            @Override
+            public Class<?> loadClass(String name) throws ClassNotFoundException {
+                Class<?> klass = ReflectUtil.findLoadedClass(this, name);
+                if (klass != null) {
+                    return klass;
+                }
+
+                if (!namePredicate.test(name)) {
+                    return super.loadClass(name);
+                }
+
+                try {
+                    String classAsPath = name.replace('.', '/') + ".class";
+
+                    // open resource
+                    try (InputStream stream = getResourceAsStream(classAsPath)) {
+                        if (stream == null)
+                            throw new IllegalArgumentException("Could not find resource stream for " + klass);
+                        byte[] bytes = stream.readAllBytes();
+
+                        ClassReader reader = new ClassReader(bytes);
+                        ClassWriter writer = new ClassWriter(writerFlags);
+                        transformer.transform(name, reader, writer);
+                        bytes = writer.toByteArray();
+
+                        return defineClass(name, bytes, 0, bytes.length);
+                    }
+                } catch (Exception e) {
+                    throw new AssertionError(e);
+                }
+            }
+
             @Override
             protected Class<?> findClass(String name) throws ClassNotFoundException {
-                Class<?> klass = super.findClass(name);
-                String internalName = klass.getName().replace('.', '/');
-                byte[] bytes = transform(klass, internalName,
-                        (classReader, writer) -> transformer.transform(internalName, classReader, writer));
-                return this.defineClass(klass.getName(), bytes, 0, bytes.length);
+                Class<?> klass = this.findLoadedClass(name);
+                if (klass != null) {
+                    return klass;
+                }
+
+                return super.findClass(name);
             }
         };
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T, T2> T2[] arrayCast(T[] arr, Class<T2> t2Class) {
+        T2[] arr2 = (T2[]) Array.newInstance(t2Class, arr.length);
+        for (int i = 0, n = arr.length; i < n; i++)
+            arr2[i] = (T2) arr[i];
+        return arr2;
     }
 
 }

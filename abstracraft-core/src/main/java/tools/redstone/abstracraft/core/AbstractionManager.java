@@ -1,6 +1,7 @@
 package tools.redstone.abstracraft.core;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -12,7 +13,14 @@ import java.util.Map;
  */
 public class AbstractionManager {
 
-    final Map<Class<?>, Class<?>> implByBaseClass = new HashMap<>(); // The registered implementation classes by base class
+    boolean implementedByDefault = false;                              // Whether it should assume unregistered methods are implemented by default
+    final Map<Class<?>, Class<?>> implByBaseClass = new HashMap<>();   // The registered implementation classes by base class
+    final Map<MethodInfo, Boolean> implementedCache = new HashMap<>(); // A cache to store whether a specific method is implemented for fast access
+
+    public AbstractionManager setImplementedByDefault(boolean implementedByDefault) {
+        this.implementedByDefault = implementedByDefault;
+        return this;
+    }
 
     /**
      * Get the base abstraction class from the given interface.
@@ -53,6 +61,37 @@ public class AbstractionManager {
                 getBaseAbstractionClass(implClass),
                 implClass
         );
+    }
+
+    /**
+     * Check whether the given method is implemented for it's
+     * owning abstraction.
+     *
+     * @param method The method.
+     * @return Whether it is implemented.
+     */
+    public boolean isImplemented(MethodInfo method) {
+        Boolean b = implementedCache.get(method);
+        if (b != null)
+            return b;
+        return implementedByDefault; // todo
+    }
+
+    public boolean areAllImplemented(List<MethodInfo> methods) {
+        if (methods == null)
+            return true;
+
+        for (MethodInfo i : methods) {
+            if (!isImplemented(i)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public void setImplemented(MethodInfo info, boolean b) {
+        implementedCache.put(info, b);
     }
 
 }

@@ -17,7 +17,8 @@ public class Usage {
         return true;
     }
 
-    public static <T> Optional<T> oneOf(Optional<T>... optionals) {
+    @SafeVarargs
+    public static <T> T requireAtLeastOne(Supplier<T>... suppliers) {
         throw new AssertionError(); // THIS WILL BE SUBSTITUTED BY THE BYTECODE TRANSFORMER
     }
 
@@ -27,23 +28,29 @@ public class Usage {
      */
     public static class InternalSubstituteMethods {
         // Substitute for `optionally(Supplier<T>)` when it is not present
-        public static Optional<?> notPresentOptional() {
+        public static Optional<?> notPresentOptional(Supplier<?> supplier) {
             return Optional.empty();
         }
 
         // Substitute for `optionally(Runnable)` when it is not present
-        public static boolean notPresentDirect() {
+        public static boolean notPresentBoolean(Runnable r) {
             return false;
         }
 
-        // Substitute for `oneOf(Optional<T>...)` when at least one of the dependencies is present
-        public static Optional<?> onePresentOptional(Optional<?> optional) {
-            return optional;
+        // Substitute for `oneOf(Supplier<T>...)` when at least one is present
+        public static Object onePresent(Supplier<?>... suppliers) {
+            for (Supplier<?> supplier : suppliers) {
+                if (supplier != null) {
+                    return supplier.get();
+                }
+            }
+
+            throw new NoneImplementedException("");
         }
 
-        // Substitute for `oneOf(Optional<T>...)` when none of the dependencies are present
-        public static Optional<?> nonePresentOptional() {
-            return Optional.empty();
+        // Substitute for `oneOf(Supplier<T>...)` when none are present
+        public static Object nonePresent(Supplier<?>... suppliers) {
+            throw new NoneImplementedException("");
         }
     }
 
