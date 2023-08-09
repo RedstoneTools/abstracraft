@@ -3,6 +3,7 @@ package tools.redstone.abstracraft.core;
 import org.objectweb.asm.*;
 
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
@@ -21,16 +22,16 @@ public class AbstractionManager {
 
     record DefaultImplAnalysis(Set<ReferenceInfo> unimplementedMethods) { }
 
-    Predicate<String> classAuditPredicate = s -> true;                                                               // The predicate for abstraction class names.
+    Predicate<String> classAuditPredicate = s -> true;                                                                  // The predicate for abstraction class names.
     Predicate<ClassDependencyAnalyzer.ReferenceAnalysis> requiredMethodPredicate = m -> m.optionalReferenceNumber <= 0; // The predicate for required methods.
-    final List<DependencyAnalysisHook> analysisHooks = new ArrayList<>();                                            // The global dependency analysis hooks
+    final List<DependencyAnalysisHook> analysisHooks = new ArrayList<>();                                               // The global dependency analysis hooks
 
-    final Map<Class<?>, Class<?>> implByBaseClass = new HashMap<>();                                                 // The registered implementation classes by base class
+    final Map<Class<?>, Class<?>> implByBaseClass = new HashMap<>();                                                    // The registered implementation classes by base class
     final Map<ReferenceInfo, Boolean> implementedCache = new HashMap<>();                                               // A cache to store whether a specific method is implemented for fast access
-    final Map<Class<?>, DefaultImplAnalysis> defaultImplAnalysisCache = new HashMap<>();                             // Cache for default implementation analysis per class
+
 
     final Map<ReferenceInfo, ClassDependencyAnalyzer.ReferenceAnalysis> refAnalysisMap = new HashMap<>();               // All analyzed methods by their descriptor
-    final Map<String, ClassDependencyAnalyzer> analyzerMap = new HashMap<>();                                        // All analyzers by class name
+    final Map<String, ClassDependencyAnalyzer> analyzerMap = new HashMap<>();                                           // All analyzers by class name
     final ClassLoader transformingClassLoader;
 
     final ClassDependencyAnalyzer partialAnalyzer;
@@ -103,31 +104,37 @@ public class AbstractionManager {
         }
     }
 
-    // Check whether the given method is implemented
-    // without referencing the cache
-    private boolean isImplemented0(ReferenceInfo method) {
-        // get abstraction class
-        Class<?> abstractionClass = ReflectUtil.getClass(method.ownerClassName());
-        if (abstractionClass == null)
-            return false;
+    /**
+     * Get the implementation of the given class if present.
+     *
+     * @param baseClass The class.
+     * @return The implementation.
+     */
+    public Class<?> getImplByClass(Class<?> baseClass) {
+        return implByBaseClass.get(baseClass);
+    }
 
-        // get implementation class for abstraction
-        Class<?> implClass = implByBaseClass.get(abstractionClass);
-        if (implClass == null)
-            // object not implemented at all
+    // Check whether the given ref is implemented
+    // without referencing the cache
+    private boolean isImplemented0(ReferenceInfo ref) {
+        // get abstraction class
+        Class<?> refClass = ReflectUtil.getClass(ref.ownerClassName());
+        if (refClass == null)
             return false;
 
         try {
-            // check method declaration
-            Method m = implClass.getMethod(method.name(), ASMUtil.asClasses(method.type().getArgumentTypes()));
+            // check hooks
+            for (var hook : analysisHooks) {
+                var res = hook.checkImplemented(this, ref, refClass);
+                if (res == null) continue;
+                return res;
+            }
 
-            if (m.getDeclaringClass() == abstractionClass)
-                return checkBytecodeImplemented(m);
-            if (m.getDeclaringClass().isInterface() && !m.isDefault())
-                return false;
-            return !Modifier.isAbstract(m.getModifiers());
-        } catch (Exception e) {
-            throw new RuntimeException("Error while checking implementation status of " + method, e);
+            // otherwise just assume it is available
+            // because it exists
+            return true;
+        } catch (Throwable t) {
+            throw new RuntimeException("Error while checking implementation status of " + ref, t);
         }
     }
 
@@ -333,40 +340,117 @@ public class AbstractionManager {
         return this;
     }
 
-    static final Type TYPE_Abstraction = Type.getType(Abstraction.class);
-    static final String NAME_Abstraction = TYPE_Abstraction.getInternalName();
+    /* ------------ Hooks -------------- */
 
-    // Check the bytecode of the owner of the given method
-    // to see whether
-    private boolean checkBytecodeImplemented(Method method) {
-        ReferenceInfo methodInfo = ReferenceInfo.forMethod(method);
-        Class<?> klass = method.getDeclaringClass();
+    public record ClassInheritanceChecker(Class<?> itf, Map<String, Boolean> cache) {
+        private static final Map<Class<?>, ClassInheritanceChecker> checkerCache = new HashMap<>();
 
-        // check cache
-        DefaultImplAnalysis analysis = defaultImplAnalysisCache.get(klass);
-        if (analysis != null)
-            return !analysis.unimplementedMethods().contains(methodInfo);
+        public static ClassInheritanceChecker forClass(Class<?> itf) {
+            return checkerCache.computeIfAbsent(itf, __ -> new ClassInheritanceChecker(itf, new HashMap<>()));
+        }
 
-        // analyze bytecode
-        final Set<ReferenceInfo> unimplementedMethods = new HashSet<>();
-        ReflectUtil.analyze(klass, new ClassVisitor(ASMUtil.ASM_V) {
-            @Override
-            public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-                final ReferenceInfo currentMethod = ReferenceInfo.forMethodInfo(klass.getName(), name, descriptor);
-                return new MethodVisitor(ASMUtil.ASM_V) {
-                    @Override
-                    public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
-                        // check for Abstraction#unimplemented call
-                        if (ClassDependencyAnalyzer.isAbstractionClass(owner.replace('/', '.')) && "unimplemented".equals(name)) {
-                            unimplementedMethods.add(currentMethod);
-                        }
-                    }
-                };
+        public boolean from(String name) {
+            Boolean b = cache.get(name);
+            if (b != null)
+                return b;
+
+            try {
+                cache.put(name, b = itf.isAssignableFrom(ReflectUtil.getClass(name)));
+                return b;
+            } catch (Exception e) {
+                return false;
             }
-        });
+        }
+    }
 
-        defaultImplAnalysisCache.put(klass, analysis = new DefaultImplAnalysis(unimplementedMethods));
-        return !unimplementedMethods.contains(methodInfo);
+    public static DependencyAnalysisHook checkDependenciesForInterface(final Class<?> itf, boolean includeFields) {
+        final ClassInheritanceChecker checker = ClassInheritanceChecker.forClass(itf);
+        return new DependencyAnalysisHook() {
+            @Override
+            public Boolean isDependencyCandidate(AnalysisContext context, ReferenceInfo ref) {
+                if (!includeFields && ref.isField())
+                    return null;
+                return checker.from(ref.ownerClassName());
+            }
+        };
+    }
+
+    public static DependencyAnalysisHook checkForExplicitImplementation(Class<?> unimplementedProvidingItf) {
+        final ClassInheritanceChecker checker = ClassInheritanceChecker.forClass(unimplementedProvidingItf);
+        return new DependencyAnalysisHook() {
+            final Map<Class<?>, DefaultImplAnalysis> defaultImplAnalysisCache = new HashMap<>(); // Cache for default implementation analysis per class
+
+            // Check the bytecode of the owner of the given method
+            // to see whether
+            private boolean checkBytecodeImplemented(Method method) {
+                ReferenceInfo methodInfo = ReferenceInfo.forMethod(method);
+                Class<?> klass = method.getDeclaringClass();
+
+                // check cache
+                DefaultImplAnalysis analysis = defaultImplAnalysisCache.get(klass);
+                if (analysis != null)
+                    return !analysis.unimplementedMethods().contains(methodInfo);
+
+                // analyze bytecode
+                final Set<ReferenceInfo> unimplementedMethods = new HashSet<>();
+                ReflectUtil.analyze(klass, new ClassVisitor(ASMUtil.ASM_V) {
+                    @Override
+                    public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+                        final ReferenceInfo currentMethod = ReferenceInfo.forMethodInfo(klass.getName(), name, descriptor, Modifier.isStatic(access));
+                        return new MethodVisitor(ASMUtil.ASM_V) {
+                            @Override
+                            public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
+                                // check for Abstraction#unimplemented call
+                                if (checker.from(owner.replace('/', '.')) && "unimplemented".equals(name) && descriptor.startsWith("()")) {
+                                    unimplementedMethods.add(currentMethod);
+                                }
+                            }
+                        };
+                    }
+                });
+
+                defaultImplAnalysisCache.put(klass, analysis = new DefaultImplAnalysis(unimplementedMethods));
+                return !unimplementedMethods.contains(methodInfo);
+            }
+
+            @Override
+            public Boolean checkImplemented(AbstractionManager manager, ReferenceInfo ref, Class<?> refClass) throws Throwable {
+                if (ref.isField())
+                    return null; // nothing to say
+
+                // get implementation class for abstraction
+                Class<?> implClass = manager.getImplByClass(refClass);
+                if (implClass == null)
+                    // object not implemented at all
+                    return false;
+
+                // check ref declaration
+                Method m = implClass.getMethod(ref.name(), ASMUtil.asClasses(ref.type().getArgumentTypes()));
+
+                if (m.getDeclaringClass() == refClass)
+                    return checkBytecodeImplemented(m);
+                if (m.getDeclaringClass().isInterface() && !m.isDefault())
+                    return false;
+                return !Modifier.isAbstract(m.getModifiers());
+            }
+        };
+    }
+
+    public static DependencyAnalysisHook checkStaticFieldsNotNull() {
+        return new DependencyAnalysisHook() {
+            @Override
+            public Boolean checkImplemented(AbstractionManager manager, ReferenceInfo ref, Class<?> refClass) throws Throwable {
+                if (!ref.isField() || !ref.isStatic()) // nothing to say
+                    return null;
+
+                // find field
+                Field field = refClass.getField(ref.name());
+                field.setAccessible(true);
+
+                // check field set
+                return field.get(null) != null;
+            }
+        };
     }
 
 }

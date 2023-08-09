@@ -73,9 +73,9 @@ public class SimpleDependencyTest {
 
     @TestSystem.Test(testClass = "TestClass", abstractionImpl = "AbcImpl")
     void test_Unimplemented(Tests testInstance, AbstractionManager abstractionManager, Abc abc) throws Throwable {
-        Assertions.assertTrue(abstractionManager.isImplemented(ReferenceInfo.forMethodInfo(Abc.class, "d", String.class)));
-        Assertions.assertTrue(abstractionManager.isImplemented(ReferenceInfo.forMethodInfo(Abc.class, "a", String.class)));
-        Assertions.assertFalse(abstractionManager.isImplemented(ReferenceInfo.forMethodInfo(Abc.class, "c", String.class)));
+        Assertions.assertTrue(abstractionManager.isImplemented(ReferenceInfo.forMethodInfo(Abc.class, "d", false, String.class)));
+        Assertions.assertTrue(abstractionManager.isImplemented(ReferenceInfo.forMethodInfo(Abc.class, "a", false, String.class)));
+        Assertions.assertFalse(abstractionManager.isImplemented(ReferenceInfo.forMethodInfo(Abc.class, "c", false, String.class)));
         Assertions.assertFalse(abstractionManager.allImplemented(testInstance.getClass()));
         Assertions.assertDoesNotThrow(() -> testInstance.testA(abc));
         Assertions.assertDoesNotThrow(() -> testInstance.testB(abc));

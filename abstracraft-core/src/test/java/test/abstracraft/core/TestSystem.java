@@ -1,12 +1,8 @@
 package test.abstracraft.core;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.function.Executable;
 import org.opentest4j.AssertionFailedError;
-import tools.redstone.abstracraft.core.AbstractionManager;
-import tools.redstone.abstracraft.core.DependencyAnalysisHook;
-import tools.redstone.abstracraft.core.MethodDependency;
-import tools.redstone.abstracraft.core.ReflectUtil;
+import tools.redstone.abstracraft.core.*;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -32,6 +28,7 @@ public class TestSystem {
         String testClass();
         String abstractionImpl();
         String[] hooks() default {};
+        boolean fieldDependencies() default true;
     }
 
     public static void main(String[] args) {
@@ -75,6 +72,14 @@ public class TestSystem {
                 String testClassName = klass.getName() + "$" + testAnnotation.testClass();
                 String abstractionImplName = klass.getName() + "$" + testAnnotation.abstractionImpl();
 
+                long t1 = System.currentTimeMillis();
+
+                // add default hooks
+                abstractionManager
+                        .addAnalysisHook(AbstractionManager.checkDependenciesForInterface(Abstraction.class, testAnnotation.fieldDependencies()))
+                        .addAnalysisHook(AbstractionManager.checkForExplicitImplementation(Abstraction.class))
+                        .addAnalysisHook(AbstractionManager.checkStaticFieldsNotNull());
+
                 // load hooks
                 List<Object> hooks = new ArrayList<>();
                 for (String partialHookClassName : testAnnotation.hooks()) {
@@ -98,6 +103,9 @@ public class TestSystem {
                 abstractionManager.registerImpl(implClass);
                 Object implInstance = implClass.getConstructor().newInstance();
 
+                long t2 = System.currentTimeMillis();
+                if (debug) System.err.println("DEBUG test " + testName + ": loading hooks and setup took " + (t2 - t1) + "ms");
+
                 // load and create test class
                 Class<?> testClass = abstractionManager.findClass(testClassName);
                 if (testClass == null)
@@ -105,6 +113,9 @@ public class TestSystem {
                 if (debug)
                     System.err.println("DEBUG Test " + testName + ": Found test " + implClass);
                 Object testInstance = testClass.getConstructor().newInstance();
+
+                long t3 = System.currentTimeMillis();
+                if (debug) System.err.println("DEBUG test " + testName + ": loading and transforming test class took " + (t3 - t2) + "ms");
 
                 // order arguments
                 Object[] args = new Object[method.getParameterTypes().length];
@@ -123,6 +134,10 @@ public class TestSystem {
                 } catch (InvocationTargetException e) {
                     throw e.getCause();
                 }
+
+                long t4 = System.currentTimeMillis();
+                if (debug) System.err.println("DEBUG test " + testName + ": executing tests took " + (t4 - t3) + "ms");
+                if (debug) System.err.println("DEBUG test " + testName + ": took " + (t4 - t1) + "ms total");
             }
         } catch (Throwable t) {
             if (t instanceof AssertionFailedError e)

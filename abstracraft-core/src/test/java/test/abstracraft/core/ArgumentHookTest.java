@@ -11,17 +11,26 @@ public class ArgumentHookTest {
         TestSystem.runTests(ArgumentHookTest.class, true);
     }
 
-    public static class Argument {
+    public interface ArgumentLike {
+        int idk();
+    }
+
+    public static class Argument implements ArgumentLike {
         public int bound;
 
         public Argument(int bound) {
             this.bound = bound;
         }
+
+        @Override
+        public int idk() {
+            return new Random().nextInt(bound);
+        }
     }
 
     public interface CommandContext extends Abstraction {
-        default int get(Argument argument) {
-            return new Random().nextInt(argument.bound);
+        default int get(ArgumentLike argument) {
+            return argument.idk();
         }
 
         default String a() { return unimplemented(); }
@@ -57,7 +66,7 @@ public class ArgumentHookTest {
                 return hook;
 
             // check for argument field type
-            if (!Argument.class.isAssignableFrom(ASMUtil.asClass(called.ref.type())))
+            if (!ArgumentLike.class.isAssignableFrom(ASMUtil.asClass(called.ref.type())))
                 return null;
 
             // return the hook
@@ -128,7 +137,7 @@ public class ArgumentHookTest {
     }
 
     @TestSystem.Test(testClass = "TestClass", abstractionImpl = "CommandContextImpl", hooks = {"MyHook"})
-    void test_ArgHook(MyHook hook, Tests tests, CommandContext ctx) {
+    void test_ArgHook(MyHook hook, Tests tests, CommandContext ctx, AbstractionManager abstractionManager) {
         System.out.println("Exclude Argument fields: " + hook.excludeFields);
     }
 

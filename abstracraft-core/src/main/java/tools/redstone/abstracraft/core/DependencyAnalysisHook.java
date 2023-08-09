@@ -32,4 +32,10 @@ public interface DependencyAnalysisHook {
     // When a method has finished analyzing
     default void leaveMethod(AnalysisContext context) { }
 
+    // Is dependency checks
+    default Boolean isDependencyCandidate(AnalysisContext context, ReferenceInfo ref) { return null; }
+
+    // Dependency presence checks
+    default Boolean checkImplemented(AbstractionManager manager, ReferenceInfo ref, Class<?> refClass) throws Throwable { return null; }
+
 }

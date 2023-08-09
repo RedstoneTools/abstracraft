@@ -5,6 +5,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
+import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -19,28 +20,6 @@ import static tools.redstone.abstracraft.core.CollectionUtil.addIfNotNull;
 public class ClassDependencyAnalyzer {
 
     static final Set<String> specialMethods = Set.of("unimplemented", "isImplemented", "<init>");     // Special methods on abstractions
-    static Map<String, Boolean> isAbstractionClassCache = new HashMap<>(); // Cache result of `isAbstractionClass`
-
-    /**
-     * Checks whether the class by the given name implements
-     * {@link Abstraction}.
-     *
-     * @param name The class name.
-     * @return Whether it is an abstraction class.
-     */
-    static boolean isAbstractionClass(String name) {
-        Boolean b = isAbstractionClassCache.get(name);
-        if (b != null)
-            return b;
-
-        try {
-            isAbstractionClassCache.put(name,
-                    b = Abstraction.class.isAssignableFrom(ReflectUtil.getClass(name)));
-            return b;
-        } catch (Exception e) {
-            return false;
-        }
-    }
 
     // The result of the dependency analysis on a class
     public static class ClassAnalysis {
@@ -190,12 +169,13 @@ public class ClassDependencyAnalyzer {
     }
 
     // Make a MethodInfo instance on the stack
-    private static void makeMethodInfo(MethodVisitor visitor, String owner, String name, String desc) {
+    private static void makeMethodInfo(MethodVisitor visitor, String owner, String name, String desc, boolean isStatic) {
         visitor.visitLdcInsn(owner);
         visitor.visitLdcInsn(name);
         visitor.visitLdcInsn(desc);
+        visitor.visitIntInsn(Opcodes.BIPUSH, isStatic ? 1 : 0);
         visitor.visitMethodInsn(Opcodes.INVOKESTATIC, TYPE_MethodInfo.getInternalName(), "forMethodInfo",
-                "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)L" + NAME_MethodInfo + ";", false);
+                "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)L" + NAME_MethodInfo + ";", false);
     }
 
     /** Get a method analysis if present */
@@ -239,6 +219,18 @@ public class ClassDependencyAnalyzer {
         if (info.ownerInternalName().equals(this.internalName) && !info.isField())
             return localMethod(context, info);
         return abstractionManager.publicReference(context, info);
+    }
+
+    /** Check whether the given reference could be a dependency */
+    public boolean isDependencyReference(AnalysisContext context, ReferenceInfo info) {
+        for (var hook : this.hooks) {
+            var res = hook.isDependencyCandidate(context, info);
+            if (res == null) continue;
+            return res;
+        }
+
+        // assume no
+        return false;
     }
 
     /**
@@ -299,7 +291,8 @@ public class ClassDependencyAnalyzer {
                 var lambda = new Lambda(isDirect, new ReferenceInfo(
                         lambdaImpl.getOwner(),
                         lambdaImpl.getOwner().replace('/', '.'), lambdaImpl.getName(),
-                        lambdaImpl.getDesc(), Type.getMethodType(lambdaImpl.getDesc())
+                        lambdaImpl.getDesc(), Type.getMethodType(lambdaImpl.getDesc()),
+                        lambdaImpl.getTag() == Opcodes.H_INVOKESTATIC
                 ), new Container<>(false));
 
                 addInsn(new InsnNode(-1) {
@@ -323,7 +316,7 @@ public class ClassDependencyAnalyzer {
 
             @Override
             public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
-                final ReferenceInfo calledMethodInfo = new ReferenceInfo(owner, owner.replace('/', '.'), name, descriptor, Type.getMethodType(descriptor));
+                final ReferenceInfo calledMethodInfo = new ReferenceInfo(owner, owner.replace('/', '.'), name, descriptor, Type.getMethodType(descriptor), opcode == Opcodes.INVOKESTATIC);
                 /* Check for usage of dependencies through proxy methods */
 
                 // check for Usage.optionally(Supplier<T>)
@@ -448,7 +441,7 @@ public class ClassDependencyAnalyzer {
                 }
 
                 /* Check for direct usage of dependencies */
-                if (isAbstractionClass(calledMethodInfo.ownerClassName()) && !specialMethods.contains(name)) {
+                if (isDependencyReference(context, calledMethodInfo) && !specialMethods.contains(name)) {
                     classAnalysis.dependencies.add(new MethodDependency(false, calledMethodInfo, null));
 
                     // dont transform required if the method its called in
@@ -462,7 +455,7 @@ public class ClassDependencyAnalyzer {
                                     if (methodAnalysis.optionalReferenceNumber < 0) {
                                         mv.visitTypeInsn(Opcodes.NEW, NAME_NotImplementedException);
                                         mv.visitInsn(Opcodes.DUP);
-                                        makeMethodInfo(mv, calledMethodInfo.ownerInternalName(), calledMethodInfo.name(), calledMethodInfo.desc());
+                                        makeMethodInfo(mv, calledMethodInfo.ownerInternalName(), calledMethodInfo.name(), calledMethodInfo.desc(), calledMethodInfo.isStatic());
                                         mv.visitMethodInsn(Opcodes.INVOKESPECIAL, NAME_NotImplementedException, "<init>", "(L" + NAME_MethodInfo + ";)V", false);
                                         mv.visitInsn(Opcodes.ATHROW);
                                     }
@@ -504,7 +497,7 @@ public class ClassDependencyAnalyzer {
             public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
                 super.visitFieldInsn(opcode, owner, name, descriptor);
                 if (opcode == Opcodes.GETFIELD || opcode == Opcodes.GETSTATIC) {
-                    var fieldInfo = ReferenceInfo.forFieldInfo(owner, name, descriptor);
+                    var fieldInfo = ReferenceInfo.forFieldInfo(owner, name, descriptor, opcode == Opcodes.GETSTATIC);
 
                     // pop instance if necessary
                     if (opcode == Opcodes.GETFIELD) {
@@ -577,7 +570,7 @@ public class ClassDependencyAnalyzer {
         classNode.accept(new ClassVisitor(ASMUtil.ASM_V) {
             @Override
             public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-                ReferenceInfo info = new ReferenceInfo(internalName, className, name, descriptor, Type.getMethodType(descriptor));
+                ReferenceInfo info = new ReferenceInfo(internalName, className, name, descriptor, Type.getMethodType(descriptor), Modifier.isStatic(access));
 
                 // check for cached
                 var analysis = getReferenceAnalysis(info);
@@ -592,7 +585,7 @@ public class ClassDependencyAnalyzer {
             public void visitEnd() {
                 // post-analyze all methods
                 for (MethodNode methodNode : classNode.methods) {
-                    ReferenceAnalysis analysis = getReferenceAnalysis(ReferenceInfo.forMethodInfo(internalName, methodNode.name, methodNode.desc));
+                    ReferenceAnalysis analysis = getReferenceAnalysis(ReferenceInfo.forMethodInfo(internalName, methodNode.name, methodNode.desc, Modifier.isStatic(methodNode.access)));
                     if (analysis.optionalReferenceNumber < 0 || abstractionManager.requiredMethodPredicate.test(analysis)) {
                         analysis.referenceRequired(new AnalysisContext(abstractionManager));
                     }
