@@ -1,4 +1,6 @@
-package tools.redstone.abstracraft.core;
+package tools.redstone.abstracraft.core.usage;
+
+import tools.redstone.abstracraft.core.analysis.ReferenceInfo;
 
 public class NotImplementedException extends RuntimeException {
 

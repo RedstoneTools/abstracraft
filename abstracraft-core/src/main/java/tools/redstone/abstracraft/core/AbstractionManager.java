@@ -1,6 +1,10 @@
 package tools.redstone.abstracraft.core;
 
 import org.objectweb.asm.*;
+import tools.redstone.abstracraft.core.analysis.*;
+import tools.redstone.abstracraft.core.usage.Abstraction;
+import tools.redstone.abstracraft.core.util.ASMUtil;
+import tools.redstone.abstracraft.core.util.ReflectUtil;
 
 import java.io.InputStream;
 import java.lang.reflect.Field;
@@ -28,7 +32,6 @@ public class AbstractionManager {
 
     final Map<Class<?>, Class<?>> implByBaseClass = new HashMap<>();                                                    // The registered implementation classes by base class
     final Map<ReferenceInfo, Boolean> implementedCache = new HashMap<>();                                               // A cache to store whether a specific method is implemented for fast access
-
 
     final Map<ReferenceInfo, ClassDependencyAnalyzer.ReferenceAnalysis> refAnalysisMap = new HashMap<>();               // All analyzed methods by their descriptor
     final Map<String, ClassDependencyAnalyzer> analyzerMap = new HashMap<>();                                           // All analyzers by class name
@@ -62,6 +65,14 @@ public class AbstractionManager {
     public AbstractionManager setRequiredMethodPredicate(Predicate<ClassDependencyAnalyzer.ReferenceAnalysis> requiredMethodPredicate) {
         this.requiredMethodPredicate = requiredMethodPredicate;
         return this;
+    }
+
+    public Predicate<String> getClassAuditPredicate() {
+        return classAuditPredicate;
+    }
+
+    public Predicate<ClassDependencyAnalyzer.ReferenceAnalysis> getRequiredMethodPredicate() {
+        return requiredMethodPredicate;
     }
 
     /**

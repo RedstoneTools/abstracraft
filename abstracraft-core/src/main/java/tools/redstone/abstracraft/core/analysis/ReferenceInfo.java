@@ -1,6 +1,7 @@
-package tools.redstone.abstracraft.core;
+package tools.redstone.abstracraft.core.analysis;
 
 import org.objectweb.asm.Type;
+import tools.redstone.abstracraft.core.util.ASMUtil;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;

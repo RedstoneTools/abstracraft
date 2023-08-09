@@ -1,4 +1,4 @@
-package tools.redstone.abstracraft.core;
+package tools.redstone.abstracraft.core.usage;
 
 import java.util.Optional;
 import java.util.function.Supplier;

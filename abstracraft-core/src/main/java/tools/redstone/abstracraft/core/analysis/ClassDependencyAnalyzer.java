@@ -1,16 +1,23 @@
-package tools.redstone.abstracraft.core;
+package tools.redstone.abstracraft.core.analysis;
 
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import tools.redstone.abstracraft.core.AbstractionManager;
+import tools.redstone.abstracraft.core.usage.NotImplementedException;
+import tools.redstone.abstracraft.core.usage.Usage;
+import tools.redstone.abstracraft.core.util.ASMUtil;
+import tools.redstone.abstracraft.core.util.CollectionUtil;
+import tools.redstone.abstracraft.core.util.Container;
+import tools.redstone.abstracraft.core.util.ReflectUtil;
 
 import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static tools.redstone.abstracraft.core.CollectionUtil.addIfNotNull;
+import static tools.redstone.abstracraft.core.util.CollectionUtil.addIfNotNull;
 
 /**
  * Analyzes given class bytes for usage of abstraction methods.
@@ -53,7 +60,7 @@ public class ClassDependencyAnalyzer {
         public Set<DependencyAnalysisHook> hooksSet = new HashSet<>();
         public List<DependencyAnalysisHook.ReferenceHook> refHooks = new ArrayList<>();
 
-        ReferenceAnalysis(ClassDependencyAnalyzer analyzer, ReferenceInfo ref) {
+        public ReferenceAnalysis(ClassDependencyAnalyzer analyzer, ReferenceInfo ref) {
             this.analyzer = analyzer;
             this.ref = ref;
             this.field = ref.isField();
@@ -147,7 +154,7 @@ public class ClassDependencyAnalyzer {
     private String className;                                             // The public name of this class
     private ClassReader classReader;                                      // The class reader for the bytecode
     private ClassNode classNode;                                          // The class node to be written
-    final List<DependencyAnalysisHook> hooks = new ArrayList<>();         // The analysis hooks
+    public final List<DependencyAnalysisHook> hooks = new ArrayList<>();  // The analysis hooks
 
     private ClassAnalysis classAnalysis = new ClassAnalysis(); // The result of analysis
 
@@ -627,7 +634,7 @@ public class ClassDependencyAnalyzer {
                 // post-analyze all methods
                 for (MethodNode methodNode : classNode.methods) {
                     ReferenceAnalysis analysis = getReferenceAnalysis(ReferenceInfo.forMethodInfo(internalName, methodNode.name, methodNode.desc, Modifier.isStatic(methodNode.access)));
-                    if (analysis.optionalReferenceNumber < 0 || abstractionManager.requiredMethodPredicate.test(analysis)) {
+                    if (analysis.optionalReferenceNumber < 0 || abstractionManager.getRequiredMethodPredicate().test(analysis)) {
                         analysis.referenceRequired(new AnalysisContext(abstractionManager));
                     }
 

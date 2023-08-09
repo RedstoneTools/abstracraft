@@ -1,4 +1,6 @@
-package tools.redstone.abstracraft.core;
+package tools.redstone.abstracraft.core.analysis;
+
+import tools.redstone.abstracraft.core.AbstractionManager;
 
 /**
  * Used to extend functionality of the dependency analyzer.

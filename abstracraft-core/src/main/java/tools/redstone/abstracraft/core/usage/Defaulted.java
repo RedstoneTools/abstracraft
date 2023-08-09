@@ -1,4 +1,4 @@
-package tools.redstone.abstracraft.core;
+package tools.redstone.abstracraft.core.usage;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

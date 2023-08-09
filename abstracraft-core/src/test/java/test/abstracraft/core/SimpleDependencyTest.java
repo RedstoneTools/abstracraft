@@ -3,6 +3,11 @@ package test.abstracraft.core;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import tools.redstone.abstracraft.core.*;
+import tools.redstone.abstracraft.core.analysis.ReferenceInfo;
+import tools.redstone.abstracraft.core.usage.Abstraction;
+import tools.redstone.abstracraft.core.usage.NoneImplementedException;
+import tools.redstone.abstracraft.core.usage.NotImplementedException;
+import tools.redstone.abstracraft.core.usage.Usage;
 
 public class SimpleDependencyTest {
 

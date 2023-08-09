@@ -1,9 +1,8 @@
-package tools.redstone.abstracraft.core;
+package tools.redstone.abstracraft.core.util;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Opcodes;
 import sun.misc.Unsafe;
 
 import java.io.InputStream;
@@ -12,13 +11,8 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
-import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
 /**
