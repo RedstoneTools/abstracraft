@@ -6,8 +6,10 @@ import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import java.util.*;
-import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
+import static tools.redstone.abstracraft.core.CollectionUtil.addIfNotNull;
 
 /**
  * Analyzes given class bytes for usage of abstraction methods.
@@ -16,17 +18,7 @@ import java.util.stream.Collectors;
  */
 public class ClassDependencyAnalyzer {
 
-    public static ClassLoader transformingLoader(Predicate<String> namePredicate, AbstractionManager abstractionManager, ClassLoader parent) {
-        return ReflectUtil.transformingClassLoader(namePredicate, parent, (name, reader, writer) -> {
-            var analyzer = new ClassDependencyAnalyzer(abstractionManager, reader);
-            analyzer.analyzeAndTransform();
-            analyzer.getClassNode().accept(writer);
-            System.out.println("ClassAnalysis(" + name + ") = " + analyzer.getClassAnalysis());
-        }, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-    }
-
-    static final int ASMV = Opcodes.ASM9;
-    static final Set<String> specialMethods = Set.of("isImplemented", "<init>");     // Special methods on abstractions
+    static final Set<String> specialMethods = Set.of("unimplemented", "isImplemented", "<init>");     // Special methods on abstractions
     static Map<String, Boolean> isAbstractionClassCache = new HashMap<>(); // Cache result of `isAbstractionClass`
 
     /**
@@ -53,45 +45,114 @@ public class ClassDependencyAnalyzer {
     // The result of the dependency analysis on a class
     public static class ClassAnalysis {
         public boolean completed = false;                                               // Whether this analysis is complete
-        public final Map<MethodInfo, MethodAnalysis> analyzedMethods = new HashMap<>(); // All analysis objects for the methods in this class
+        public final Map<ReferenceInfo, ReferenceAnalysis> analyzedMethods = new HashMap<>(); // All analysis objects for the methods in this class
         public Set<MethodDependency> dependencies = new HashSet<>();                    // All method dependencies recorded in this class
+        public List<OneOfDependency> switchDependencies = new ArrayList<>();            // All oneOf dependencies
+
+        // Check whether all direct and switch dependencies are implemented
+        public boolean areAllImplemented(AbstractionManager abstractionManager) {
+            for (MethodDependency dep : dependencies)
+                if (!dep.isImplemented(abstractionManager))
+                    return false;
+            for (OneOfDependency dep : switchDependencies)
+                if (!dep.implemented())
+                    return false;
+            return true;
+        }
     }
 
-    public static class MethodAnalysis {
-        public final MethodInfo method;                                           // The method this analysis covers
-        public List<MethodInfo> requiredDependencies = new ArrayList<>();         // All recorded required dependencies used by this method
+    public static class ReferenceAnalysis {
+        public final ClassDependencyAnalyzer analyzer;                            // The analyzer instance.
+        public final ReferenceInfo ref;                                           // The reference this analysis covers
+        public List<ReferenceInfo> requiredDependencies = new ArrayList<>();      // All recorded required dependencies used by this method
         public int optionalReferenceNumber = 0;                                   // Whether this method is referenced in an optionally() block
-        public List<MethodAnalysis> allAnalyzedMethodsCalled = new ArrayList<>(); // The analysis objects of all methods normally called by this method
-        public boolean complete = false;
+        public List<ReferenceAnalysis> allAnalyzedReferences = new ArrayList<>(); // The analysis objects of all methods/fields normally called by this method
+        public boolean complete = false;                                          // Whether this analysis has completed all mandatory tasks
+        public boolean partial = false;                                           // Whether this analysis is used purely to store meta or if it is actually analyzed with bytecode analysis
+        public final boolean field;
 
-        MethodAnalysis(MethodInfo method) {
-            this.method = method;
+        public Set<DependencyAnalysisHook> hooksSet = new HashSet<>();
+        public List<DependencyAnalysisHook.ReferenceHook> refHooks = new ArrayList<>();
+
+        ReferenceAnalysis(ClassDependencyAnalyzer analyzer, ReferenceInfo ref) {
+            this.analyzer = analyzer;
+            this.ref = ref;
+            this.field = ref.isField();
+        }
+
+        // Checked refHooks.add
+        private void addRefHook(DependencyAnalysisHook hook, Supplier<DependencyAnalysisHook.ReferenceHook> supplier) {
+            // create new ref hook
+            addIfNotNull(refHooks, supplier.get());
         }
 
         // Register and propagate that this method is part of an optional block
-        public void referenceOptional() {
-            this.optionalReferenceNumber += 1;
-            for (MethodAnalysis analysis : allAnalyzedMethodsCalled) {
-                analysis.referenceOptional();
+        public void referenceOptional(AnalysisContext context) {
+            for (var hook : analyzer.hooks) addRefHook(hook, () -> hook.optionalReference(context, this));
+            for (var refHook : refHooks) refHook.optionalReference(context);
+
+            this.optionalReferenceNumber += 2;
+            for (ReferenceAnalysis analysis : allAnalyzedReferences) {
+                analysis.referenceOptional(context);
             }
         }
 
         // Register and propagate that this method is required
-        public void referenceRequired() {
-            this.optionalReferenceNumber -= 1000;
-            for (MethodAnalysis analysis : allAnalyzedMethodsCalled) {
-                analysis.referenceRequired();
+        public void referenceRequired(AnalysisContext context) {
+            for (var hook : analyzer.hooks) addRefHook(hook, () -> hook.requiredReference(context, this));
+            for (var refHook : refHooks) refHook.requiredReference(context);
+
+            this.optionalReferenceNumber -= 1;
+            for (ReferenceAnalysis analysis : allAnalyzedReferences) {
+                analysis.referenceRequired(context);
             }
+        }
+
+        // Register and propagate that this method was dropped from an optionally() block
+        public void optionalReferenceDropped(AnalysisContext context) {
+            for (var refHook : refHooks) refHook.optionalBlockDiscarded(context);
+            for (ReferenceAnalysis analysis : allAnalyzedReferences) {
+                analysis.optionalReferenceDropped(context);
+            }
+        }
+
+        // Finish analysis of the method
+        public void postAnalyze() {
+            for (var refHook : refHooks) refHook.postAnalyze();
+            for (ReferenceAnalysis analysis : allAnalyzedReferences) {
+                analysis.postAnalyze();
+            }
+        }
+
+        public void registerReference(ReferenceInfo info) {
+            addIfNotNull(allAnalyzedReferences, analyzer.getReferenceAnalysis(info));
+        }
+
+        public void registerReference(ReferenceAnalysis analysis) {
+            allAnalyzedReferences.add(analysis);
+        }
+
+        public boolean isPartial() {
+            return partial;
+        }
+
+        public boolean isComplete() {
+            return complete;
+        }
+
+        public boolean isField() {
+            return field;
         }
     }
 
     /* Stack Tracking */
-    record InstanceOf(Type type) { }
-    record ReturnValue(MethodInfo method, Type type) { public static ReturnValue of(MethodInfo info) { return new ReturnValue(info, info.asmType().getReturnType()); } }
-    record FromVar(int varIndex) { }
+    public record FieldValue(ReferenceInfo fieldInfo, boolean isStatic) { }
+    public record InstanceOf(Type type) { }
+    public record ReturnValue(ReferenceInfo method, Type type) { public static ReturnValue of(ReferenceInfo info) { return new ReturnValue(info, info.type().getReturnType()); } }
+    public record FromVar(int varIndex, Type type) { }
 
     /* Compute Stack Tracking */
-    record Lambda(boolean direct, MethodInfo methodInfo, Container<Boolean> discard) { }
+    public record Lambda(boolean direct, ReferenceInfo methodInfo, Container<Boolean> discard) { }
 
     static final Type TYPE_Usage = Type.getType(Usage.class);
     static final String NAME_Usage = TYPE_Usage.getInternalName();
@@ -99,25 +160,33 @@ public class ClassDependencyAnalyzer {
     static final String NAME_InternalSubstituteMethods = TYPE_InternalSubstituteMethods.getInternalName();
     static final Type TYPE_NotImplementedException = Type.getType(NotImplementedException.class);
     static final String NAME_NotImplementedException = TYPE_NotImplementedException.getInternalName();
-    static final Type TYPE_MethodInfo = Type.getType(MethodInfo.class);
+    static final Type TYPE_MethodInfo = Type.getType(ReferenceInfo.class);
     static final String NAME_MethodInfo = TYPE_MethodInfo.getInternalName();
 
-    private final AbstractionManager abstractionManager;       // The abstraction manager
-    private final String internalName;                         // The internal name of this class
-    private final String className;                            // The public name of this class
-    private final ClassReader classReader;                     // The class reader for the bytecode
-    private final ClassNode classNode;                         // The class node to be written
+    private final AbstractionManager abstractionManager;                  // The abstraction manager
+    private String internalName;                                          // The internal name of this class
+    private String className;                                             // The public name of this class
+    private ClassReader classReader;                                      // The class reader for the bytecode
+    private ClassNode classNode;                                          // The class node to be written
+    final List<DependencyAnalysisHook> hooks = new ArrayList<>();         // The analysis hooks
 
     private ClassAnalysis classAnalysis = new ClassAnalysis(); // The result of analysis
+
+    public ClassDependencyAnalyzer addHook(DependencyAnalysisHook hook) {
+        this.hooks.add(hook);
+        return this;
+    }
 
     public ClassDependencyAnalyzer(AbstractionManager manager,
                                    ClassReader classReader) {
         this.abstractionManager = manager;
-        this.internalName = classReader.getClassName();
-        this.className = internalName.replace('/', '.');
-        this.classReader = classReader;
-        this.classNode = new ClassNode(ASMV);
-        classReader.accept(classNode, 0);
+        if (classReader != null) {
+            this.internalName = classReader.getClassName();
+            this.className = internalName.replace('/', '.');
+            this.classReader = classReader;
+            this.classNode = new ClassNode(ASMUtil.ASM_V);
+            classReader.accept(classNode, 0);
+        }
     }
 
     // Make a MethodInfo instance on the stack
@@ -125,25 +194,29 @@ public class ClassDependencyAnalyzer {
         visitor.visitLdcInsn(owner);
         visitor.visitLdcInsn(name);
         visitor.visitLdcInsn(desc);
-        visitor.visitMethodInsn(Opcodes.INVOKESTATIC, TYPE_MethodInfo.getInternalName(), "forInfo",
+        visitor.visitMethodInsn(Opcodes.INVOKESTATIC, TYPE_MethodInfo.getInternalName(), "forMethodInfo",
                 "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)L" + NAME_MethodInfo + ";", false);
     }
 
     /** Get a method analysis if present */
-    public MethodAnalysis getMethodAnalysis(MethodInfo info) {
+    public ReferenceAnalysis getReferenceAnalysis(ReferenceInfo info) {
         return abstractionManager.getMethodAnalysis(info);
     }
 
     /** Analyzes and transforms a local method */
-    public MethodAnalysis localMethod(MethodInfo info) {
+    public ReferenceAnalysis localMethod(AnalysisContext context, ReferenceInfo info) {
         try {
             if (!info.ownerInternalName().equals(this.internalName))
                 throw new AssertionError();
 
             // check for cached
-            var analysis = getMethodAnalysis(info);
+            var analysis = getReferenceAnalysis(info);
             if (analysis != null && analysis.complete)
                 return analysis;
+
+            // check for recursion
+            if (context.analysisStack.contains(info))
+                return null;
 
             // find method node
             MethodNode m = ASMUtil.findMethod(classNode, info.name(), info.desc());
@@ -151,8 +224,8 @@ public class ClassDependencyAnalyzer {
                 return null;
 
             // create analysis, visit method and register result
-            analysis = new MethodAnalysis(info);
-            MethodVisitor v = methodVisitor(info, analysis, m);
+            analysis = new ReferenceAnalysis(this, info);
+            MethodVisitor v = methodVisitor(context, info, analysis, m);
             m.accept(v); // the visitor registers the result automatically
             return analysis;
         } catch (Exception e) {
@@ -161,21 +234,11 @@ public class ClassDependencyAnalyzer {
     }
 
     /** Analyzes and transforms a method from any class */
-    public MethodAnalysis publicMethod(MethodInfo info) {
+    public ReferenceAnalysis publicReference(AnalysisContext context, ReferenceInfo info) {
         // check for local method
-        if (info.ownerInternalName().equals(this.internalName))
-            return localMethod(info);
-
-        // check for cached
-        var analysis = getMethodAnalysis(info);
-        if (analysis != null && analysis.complete)
-            return analysis;
-
-        // analyze through owner class
-        ClassDependencyAnalyzer analyzer = abstractionManager.analyzer(info.ownerInternalName(), true);
-        if (analyzer == null)
-            return null;
-        return analyzer.localMethod(info);
+        if (info.ownerInternalName().equals(this.internalName) && !info.isField())
+            return localMethod(context, info);
+        return abstractionManager.publicReference(context, info);
     }
 
     /**
@@ -184,7 +247,7 @@ public class ClassDependencyAnalyzer {
      * @param currentMethodInfo The method descriptor.
      * @return The visitor.
      */
-    public MethodVisitor methodVisitor(MethodInfo currentMethodInfo, MethodAnalysis methodAnalysis, MethodNode oldMethod) {
+    public MethodVisitor methodVisitor(AnalysisContext context, ReferenceInfo currentMethodInfo, ReferenceAnalysis methodAnalysis, MethodNode oldMethod) {
         String name = currentMethodInfo.name();
         String descriptor = currentMethodInfo.desc();
 
@@ -196,11 +259,20 @@ public class ClassDependencyAnalyzer {
         abstractionManager.registerAnalysis(methodAnalysis);
         classAnalysis.analyzedMethods.put(currentMethodInfo, methodAnalysis);
 
+//        classNode.accept(new TraceClassVisitor(new PrintWriter(System.out)));
+
         // create method visitor
         MethodNode newMethod = new MethodNode(oldMethod.access, name, descriptor, oldMethod.signature, oldMethod.exceptions.toArray(new String[0]));
-        var visitor = new MethodVisitor(ASMV, newMethod) {
+        var visitor = new MethodVisitor(ASMUtil.ASM_V, newMethod) {
             // The compute stack of lambda's
             Stack<Object> computeStack = new Stack<>();
+
+            {
+                context.analysisStack.push(currentMethodInfo);
+                context.computeStacks.push(computeStack);
+                context.enteredMethod();
+                for (var hook : hooks) hook.enterMethod(context);
+            }
 
             public void addInsn(InsnNode node) {
                 newMethod.instructions.add(node);
@@ -224,7 +296,7 @@ public class ClassDependencyAnalyzer {
                 int argCount = lambdaImplType.getArgumentTypes().length +
                         (lambdaImpl.getTag() != Opcodes.H_INVOKESTATIC && lambdaImpl.getTag() != Opcodes.H_GETSTATIC ? 1 : 0);
                 boolean isDirect = !lambdaImpl.getName().startsWith("lambda$");
-                var lambda = new Lambda(isDirect, new MethodInfo(
+                var lambda = new Lambda(isDirect, new ReferenceInfo(
                         lambdaImpl.getOwner(),
                         lambdaImpl.getOwner().replace('/', '.'), lambdaImpl.getName(),
                         lambdaImpl.getDesc(), Type.getMethodType(lambdaImpl.getDesc())
@@ -251,37 +323,37 @@ public class ClassDependencyAnalyzer {
 
             @Override
             public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
-                final MethodInfo calledMethodInfo = new MethodInfo(owner, owner.replace('/', '.'), name, descriptor, Type.getMethodType(descriptor));
+                final ReferenceInfo calledMethodInfo = new ReferenceInfo(owner, owner.replace('/', '.'), name, descriptor, Type.getMethodType(descriptor));
                 /* Check for usage of dependencies through proxy methods */
 
                 // check for Usage.optionally(Supplier<T>)
                 if (NAME_Usage.equals(owner) && "optionally".equals(name)) {
                     var lambda = (Lambda) computeStack.pop();
-                    MethodAnalysis analysis;
-                    if (!lambda.direct()) {
-                        // visit/transform lambda function
-                        analysis = localMethod(lambda.methodInfo);
-                        analysis.referenceOptional();
-                    } else {
-                        analysis = null;
-                    }
+                    ReferenceAnalysis analysis;
+                    analysis = publicReference(context, lambda.methodInfo);
+                    analysis.referenceOptional(context);
 
-                    List<MethodInfo> dependencies = lambda.direct() ?
+                    List<ReferenceInfo> dependencies = lambda.direct() ?
                             List.of(lambda.methodInfo) :
                             analysis.requiredDependencies;
                     if (dependencies != null) {
                         dependencies.forEach(dep ->
-                                classAnalysis.dependencies.add(new MethodDependency(true, dep, currentMethodInfo)));
+                                classAnalysis.dependencies.add(new MethodDependency(true, dep, null)));
                     }
 
                     // discard lambda if the dependencies arent fulfilled
-                    if (!abstractionManager.areAllImplemented(dependencies)) {
+                    boolean allImplemented = abstractionManager.areAllImplemented(dependencies);
+                    if (!allImplemented) {
+                        if (!lambda.direct()) {
+                            analysis.optionalReferenceDropped(context);
+                        }
+
                         lambda.discard.value = true;
                     }
 
                     if ("(Ljava/util/function/Supplier;)Ljava/util/Optional;".equals(descriptor)) {
                         // transform bytecode
-                        if (!abstractionManager.areAllImplemented(dependencies)) {
+                        if (!allImplemented) {
                             // the methods are not all implemented,
                             // substitute call with notPresentOptional
                             super.visitMethodInsn(
@@ -300,7 +372,7 @@ public class ClassDependencyAnalyzer {
 
                     if ("(Ljava/lang/Runnable;)B".equals(descriptor)) {
                         // transform bytecode
-                        if (!abstractionManager.areAllImplemented(dependencies)) {
+                        if (!allImplemented) {
                             // the methods are not all implemented,
                             // substitute call with notPresentBoolean
                             super.visitMethodInsn(
@@ -324,37 +396,38 @@ public class ClassDependencyAnalyzer {
                 if (NAME_Usage.equals(owner) && "requireAtLeastOne".equals(name) && "([Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)) {
                     // get array of lambdas
                     Lambda[] lambdas = ReflectUtil.arrayCast((Object[]) computeStack.pop(), Lambda.class);
-                    Lambda implemented = null;
-                    boolean oneImplemented = false;
+                    Lambda chosen = null;                                            // The chosen lambda
+                    List<MethodDependency> chosenDependencies = new ArrayList<>();   // The method dependencies of the chosen lambda
+                    List<MethodDependency> optionalDependencies = new ArrayList<>(); // The optional dependencies of this switch
                     for (Lambda lambda : lambdas) {
-                        MethodAnalysis analysis;
-                        if (!lambda.direct()) {
-                            // visit/transform lambda function
-                            analysis = localMethod(lambda.methodInfo);
-                            analysis.referenceOptional();
-                        } else {
-                            analysis = null;
-                        }
+                        ReferenceAnalysis analysis;
+                        analysis = publicReference(context, lambda.methodInfo);
 
-                        List<MethodInfo> dependencies = lambda.direct() ?
+                        // get dependencies as methods
+                        List<ReferenceInfo> dependencies = lambda.direct() ?
                                 List.of(lambda.methodInfo) :
                                 analysis.requiredDependencies;
-                        if (!abstractionManager.areAllImplemented(dependencies) || oneImplemented) {
-                            if (analysis != null) analysis.referenceOptional();
+
+                        // if not implemented, add as optional dependencies
+                        if (!abstractionManager.areAllImplemented(dependencies) || chosen != null) {
+                            CollectionUtil.mapImmediate(dependencies, dep -> new MethodDependency(true, dep, null), classAnalysis.dependencies, optionalDependencies);
                             lambda.discard.value = true;
                             continue;
                         }
 
-                        oneImplemented = true;
-                        implemented = lambda;
-                        if (analysis != null) analysis.referenceRequired();
+                        // if one is implemented, add as required dependencies
+                        chosen = lambda;
+                        analysis.referenceRequired(context);
                         if (dependencies != null) {
-                            dependencies.forEach(dep -> classAnalysis.dependencies.add(new MethodDependency(false, dep, currentMethodInfo)));
+                            CollectionUtil.mapImmediate(dependencies, dep -> new MethodDependency(false, dep, false), classAnalysis.dependencies, chosenDependencies);
                         }
                     }
 
+                    // register switch
+                    classAnalysis.switchDependencies.add(new OneOfDependency(chosenDependencies, optionalDependencies, chosen != null));
+
                     // replace method call
-                    if (oneImplemented) {
+                    if (chosen != null) {
                         super.visitMethodInsn(Opcodes.INVOKESTATIC, NAME_InternalSubstituteMethods,
                                 "onePresent", "([Ljava/util/function/Supplier;)Ljava/lang/Object;",
                                 false);
@@ -368,35 +441,37 @@ public class ClassDependencyAnalyzer {
                 }
 
                 // analyze public method
-                var analysis = publicMethod(calledMethodInfo);
+                var analysis = publicReference(context, calledMethodInfo);
                 if (analysis != null) {
-                    methodAnalysis.allAnalyzedMethodsCalled.add(analysis);
-
-                    if (methodAnalysis.optionalReferenceNumber <= 0) {
-                        methodAnalysis.requiredDependencies.addAll(analysis.requiredDependencies);
-                    }
+                    methodAnalysis.requiredDependencies.addAll(analysis.requiredDependencies);
+                    methodAnalysis.allAnalyzedReferences.add(analysis);
                 }
 
                 /* Check for direct usage of dependencies */
                 if (isAbstractionClass(calledMethodInfo.ownerClassName()) && !specialMethods.contains(name)) {
+                    classAnalysis.dependencies.add(new MethodDependency(false, calledMethodInfo, null));
+
                     // dont transform required if the method its called in
                     // is a block used by Usage.optionally
                     if (methodAnalysis.optionalReferenceNumber <= 0) {
-                        classAnalysis.dependencies.add(new MethodDependency(false, calledMethodInfo, currentMethodInfo));
-
                         // insert runtime throw
                         if (!abstractionManager.isImplemented(calledMethodInfo)) {
-                            super.visitTypeInsn(Opcodes.NEW, NAME_NotImplementedException);
-                            super.visitInsn(Opcodes.DUP);
-                            makeMethodInfo(this, calledMethodInfo.ownerInternalName(), calledMethodInfo.name(), calledMethodInfo.desc());
-                            super.visitMethodInsn(Opcodes.INVOKESPECIAL, NAME_NotImplementedException, "<init>", "(L" + NAME_MethodInfo + ";)V", false);
-                            super.visitInsn(Opcodes.ATHROW);
+                            addInsn(new InsnNode(-1) {
+                                @Override
+                                public void accept(MethodVisitor mv) {
+                                    if (methodAnalysis.optionalReferenceNumber < 0) {
+                                        mv.visitTypeInsn(Opcodes.NEW, NAME_NotImplementedException);
+                                        mv.visitInsn(Opcodes.DUP);
+                                        makeMethodInfo(mv, calledMethodInfo.ownerInternalName(), calledMethodInfo.name(), calledMethodInfo.desc());
+                                        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, NAME_NotImplementedException, "<init>", "(L" + NAME_MethodInfo + ";)V", false);
+                                        mv.visitInsn(Opcodes.ATHROW);
+                                    }
+                                }
+                            });
                         }
                     }
 
                     methodAnalysis.requiredDependencies.add(calledMethodInfo);
-                    super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
-                    return;
                 }
 
                 super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
@@ -426,16 +501,36 @@ public class ClassDependencyAnalyzer {
             }
 
             @Override
+            public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
+                super.visitFieldInsn(opcode, owner, name, descriptor);
+                if (opcode == Opcodes.GETFIELD || opcode == Opcodes.GETSTATIC) {
+                    var fieldInfo = ReferenceInfo.forFieldInfo(owner, name, descriptor);
+
+                    // pop instance if necessary
+                    if (opcode == Opcodes.GETFIELD) {
+                        computeStack.pop();
+                    }
+
+                    computeStack.push(new FieldValue(fieldInfo, false));
+
+                    // register reference
+                    var analysis = publicReference(context, fieldInfo);
+                    context.currentAnalysis().registerReference(analysis);
+                    analysis.referenceRequired(context);
+                }
+            }
+
+            @Override
             public void visitVarInsn(int opcode, int varIndex) {
                 super.visitVarInsn(opcode, varIndex);
+                Type t = Type.getType(oldMethod.localVariables.get(varIndex).desc);
                 switch (opcode) {
-                    case Opcodes.ALOAD -> computeStack.push(new FromVar(varIndex));
-                    case Opcodes.ASTORE -> computeStack.pop();
+                    case Opcodes.ALOAD, Opcodes.ILOAD, Opcodes.DLOAD, Opcodes.FLOAD -> computeStack.push(new FromVar(varIndex, t));
+                    case Opcodes.ASTORE, Opcodes.ISTORE, Opcodes.DSTORE, Opcodes.FSTORE -> computeStack.pop();
                 }
             }
 
             @Override public void visitLdcInsn(Object value) { super.visitLdcInsn(value); computeStack.push(value); }
-            @Override public void visitFieldInsn(int opcode, String owner, String name, String descriptor) { super.visitFieldInsn(opcode, owner, name, descriptor); computeStack.push(null /* todo */); }
             @Override public void visitIntInsn(int opcode, int operand) { super.visitIntInsn(opcode, operand); computeStack.push(operand); }
             @Override public void visitInsn(int opcode) {
                 super.visitInsn(opcode);
@@ -448,7 +543,7 @@ public class ClassDependencyAnalyzer {
                     case Opcodes.ICONST_3 -> computeStack.push(3);
                     case Opcodes.ICONST_4 -> computeStack.push(4);
                     case Opcodes.ICONST_5 -> computeStack.push(5);
-                    case Opcodes.POP -> computeStack.pop();
+                    case Opcodes.POP, Opcodes.ARETURN, Opcodes.IRETURN, Opcodes.DRETURN, Opcodes.FRETURN -> { if (!computeStack.isEmpty()) computeStack.pop(); }
                     case Opcodes.POP2 -> { computeStack.pop(); computeStack.pop(); }
                     case Opcodes.AASTORE -> {
                         Object val = computeStack.pop();
@@ -461,6 +556,8 @@ public class ClassDependencyAnalyzer {
 
             @Override
             public void visitEnd() {
+                for (var hook : hooks) hook.leaveMethod(context);
+                context.leaveMethod();
                 methodAnalysis.complete = true;
             }
         };
@@ -476,37 +573,56 @@ public class ClassDependencyAnalyzer {
      * @return This.
      */
     public ClassDependencyAnalyzer analyzeAndTransform() {
-        classAnalysis = new ClassAnalysis();
-
         /* find dependencies */
-        classNode.accept(new ClassVisitor(ASMV) {
+        classNode.accept(new ClassVisitor(ASMUtil.ASM_V) {
             @Override
             public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-                MethodInfo info = new MethodInfo(internalName, className, name, descriptor, Type.getMethodType(descriptor));
+                ReferenceInfo info = new ReferenceInfo(internalName, className, name, descriptor, Type.getMethodType(descriptor));
 
                 // check for cached
-                var analysis = getMethodAnalysis(info);
+                var analysis = getReferenceAnalysis(info);
                 if (analysis != null && analysis.complete)
                     return null;
 
                 // create analysis, visit method and register result
-                return methodVisitor(info, new MethodAnalysis(info), ASMUtil.findMethod(classNode, name, descriptor));
+                return methodVisitor(new AnalysisContext(abstractionManager), info, new ReferenceAnalysis(ClassDependencyAnalyzer.this, info), ASMUtil.findMethod(classNode, name, descriptor));
             }
 
             @Override
             public void visitEnd() {
                 // post-analyze all methods
                 for (MethodNode methodNode : classNode.methods) {
-                    MethodAnalysis analysis = getMethodAnalysis(MethodInfo.forInfo(internalName, methodNode.name, methodNode.desc));
-                    if (analysis.optionalReferenceNumber <= 0) {
-                        analysis.referenceRequired();
+                    ReferenceAnalysis analysis = getReferenceAnalysis(ReferenceInfo.forMethodInfo(internalName, methodNode.name, methodNode.desc));
+                    if (analysis.optionalReferenceNumber < 0 || abstractionManager.requiredMethodPredicate.test(analysis)) {
+                        analysis.referenceRequired(new AnalysisContext(abstractionManager));
                     }
+
+                    analysis.postAnalyze();
                 }
 
                 // filter dependencies
                 classAnalysis.dependencies = classAnalysis.dependencies.stream()
-                        .map(d -> d.optional() ? d : d.asOptional(getMethodAnalysis(d.calledIn()).optionalReferenceNumber > 0))
+                        .map(d -> d.optional() ? d : d.asOptional(getReferenceAnalysis(d.info()).optionalReferenceNumber >= 0))
                         .collect(Collectors.toSet());
+
+                // reduce dependencies
+                Set<MethodDependency> finalDependencySet = new HashSet<>();
+                for (MethodDependency dependency : classAnalysis.dependencies) {
+                    final MethodDependency mirror = dependency.asOptional(!dependency.optional());
+
+                    if (!dependency.optional()) {
+                        finalDependencySet.remove(mirror);
+                        finalDependencySet.add(dependency);
+                        continue;
+                    }
+
+                    if (!finalDependencySet.contains(mirror)) {
+                        finalDependencySet.add(dependency);
+                        continue;
+                    }
+                }
+
+                classAnalysis.dependencies = finalDependencySet;
 
                 // mark complete
                 classAnalysis.completed = true;

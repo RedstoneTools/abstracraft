@@ -1,5 +1,6 @@
 package tools.redstone.abstracraft.core;
 
+import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -7,6 +8,8 @@ import org.objectweb.asm.tree.MethodNode;
 import java.lang.reflect.Array;
 
 public class ASMUtil {
+
+    public static final int ASM_V = Opcodes.ASM9;
 
     /**
      * Find the method node by the given name and descriptor in the given class.
@@ -23,7 +26,7 @@ public class ASMUtil {
         return null;
     }
 
-    public static MethodNode findMethod(ClassNode node, MethodInfo info) {
+    public static MethodNode findMethod(ClassNode node, ReferenceInfo info) {
         return findMethod(node, info.name(), info.desc());
     }
 

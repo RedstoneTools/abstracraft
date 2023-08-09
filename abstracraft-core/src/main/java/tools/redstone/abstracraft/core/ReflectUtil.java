@@ -1,6 +1,7 @@
 package tools.redstone.abstracraft.core;
 
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import sun.misc.Unsafe;
@@ -14,7 +15,9 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
@@ -152,99 +155,15 @@ public class ReflectUtil {
     }
 
     /**
-     * Force the given field to be accessible, removing
-     * any access modifiers and the final modifier.
+     * Analyze the given class using the given class visitor.
      *
-     * @param f The field.
-     * @return The field back.
+     * @param klass The class.
+     * @param visitor The visitor.
      */
-    public static Field forceAccessible(Field f) {
-        int mods = f.getModifiers();
-        mods &= ~Modifier.PRIVATE;
-        mods &= ~Modifier.PROTECTED;
-        mods &= ~Modifier.FINAL;
-        mods |= Modifier.PUBLIC;
-        setModifiers(f, mods);
-        return f;
-    }
-
-    /**
-     * Get the value of the given field.
-     *
-     * @param on The instance.
-     * @param f The field.
-     * @param <T> The value type.
-     * @return The value.
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T getFieldValue(Object on, Field f) {
-        try {
-            return (T) f.get(on);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to get field value of " + f, e);
-        }
-    }
-
-    /**
-     * Get the value of the given field.
-     *
-     * @param on The instance.
-     * @param f The field.
-     * @param value The value to set.
-     */
-    public static void setFieldValue(Object on, Field f, Object value) {
-        try {
-            f.set(on, value);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to set field value of " + f, e);
-        }
-    }
-
-    /**
-     * Gets the bytes from the given source class, transforms
-     * them using the given method and returns the result.
-     *
-     * @param src The source class.
-     * @param name The name of the result class.
-     * @param transformer The transformer function.
-     * @return The class
-     */
-    public static byte[] transform(Class<?> src,
-                                   String name,
-                                   BiConsumer<ClassReader, ClassWriter> transformer) {
-        byte[] bytes = getBytes(src);
+    public static void analyze(Class<?> klass, ClassVisitor visitor) {
+        byte[] bytes = getBytes(klass);
         ClassReader reader = new ClassReader(bytes);
-        ClassWriter writer = new ClassWriter(reader, 0);
-        writer.visit(Opcodes.V16, Opcodes.ACC_PUBLIC, name, "L" + name + ";", "java/lang/Object", new String[] { });
-        transformer.accept(reader, writer);
-
-        return writer.toByteArray();
-    }
-
-    /**
-     * Gets the bytes from the given source class, transforms
-     * them using the given method and finally loads the class and returns it
-     * to do tests on.
-     *
-     * @param loader The loader to load the class with.
-     * @param src The source class.
-     * @param transformer The transformer function.
-     * @return The loaded class.
-     */
-    public static Class<?> transformAndLoad(DirectClassLoader loader,
-                                            Class<?> src,
-                                            String name,
-                                            BiConsumer<ClassReader, ClassWriter> transformer) {
-        byte[] resultBytes = transform(src, name.replace('.', '/'), transformer);
-        return loader.define(name, resultBytes);
-    }
-
-    public static DirectClassLoader directClassLoader() {
-        return new DirectClassLoader();
-    }
-
-    public static DirectClassLoader directClassLoader(ClassLoader loader) {
-        return new DirectClassLoader(loader);
+        reader.accept(visitor, 0);
     }
 
     /** Defines a class transformer. */
@@ -264,7 +183,6 @@ public class ReflectUtil {
             while (loader != null) {
                 Class<?> klass = (Class<?>) ClassLoader_findLoadedClass.invoke(loader, name);
                 if (klass != null) {
-//                    System.out.println("found loaded class " + name + " in loader " + loader);
                     return klass;
                 }
 
@@ -287,23 +205,29 @@ public class ReflectUtil {
     public static ClassLoader transformingClassLoader(Predicate<String> namePredicate,
                                                       ClassTransformer transformer,
                                                       int writerFlags) {
-        return transformingClassLoader(namePredicate, ClassLoader.getSystemClassLoader(), transformer, writerFlags);
+        return transformingClassLoader(namePredicate, ClassLoader.getSystemClassLoader(), transformer, writerFlags, false);
     }
 
     public static ClassLoader transformingClassLoader(Predicate<String> namePredicate,
                                                       ClassLoader parent,
                                                       ClassTransformer transformer,
-                                                      int writerFlags) {
+                                                      int writerFlags,
+                                                      boolean warnLoaded) {
+        // create class loader
         return new ClassLoader(parent) {
             @Override
             public Class<?> loadClass(String name) throws ClassNotFoundException {
-                Class<?> klass = ReflectUtil.findLoadedClass(this, name);
-                if (klass != null) {
-                    return klass;
-                }
-
                 if (!namePredicate.test(name)) {
                     return super.loadClass(name);
+                }
+
+                Class<?> klass = ReflectUtil.findLoadedClass(this, name);
+                if (klass != null) {
+                    if (warnLoaded && klass.getClassLoader() != this) {
+                        System.err.println("WARNING Found loaded class " + name + " in loader " + klass.getClassLoader());
+                    }
+
+                    return klass;
                 }
 
                 try {

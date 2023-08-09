@@ -1,12 +1,135 @@
 package test.abstracraft.core;
 
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.function.Executable;
+import org.opentest4j.AssertionFailedError;
+import tools.redstone.abstracraft.core.AbstractionManager;
+import tools.redstone.abstracraft.core.DependencyAnalysisHook;
+import tools.redstone.abstracraft.core.MethodDependency;
+import tools.redstone.abstracraft.core.ReflectUtil;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Simple test system because JUnit is stupid and loads all classes automatically.
  */
 public class TestSystem {
+
+    // Signifies a test
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.METHOD)
+    public @interface Test {
+        String testClass();
+        String abstractionImpl();
+        String[] hooks() default {};
+    }
+
+    public static void main(String[] args) {
+
+    }
+
+    // System.out.println
+    static <T> T println(T o) {
+        System.out.println(o);
+        return o;
+    }
+
+    // Run code with exceptions caught
+    static void runSafe(Executable executable) {
+        try {
+            executable.execute();
+        } catch (Throwable t) {
+            t.printStackTrace();
+        }
+    }
+
+    // Run all tests in the given class
+    public static void runTests(Class<?> klass, boolean debug) {
+        try {
+            // create abstraction manager
+            final AbstractionManager abstractionManager = new AbstractionManager()
+                    .setClassAuditPredicate(name -> name.startsWith(klass.getName()))
+                    .setRequiredMethodPredicate(method -> method.ref.name().startsWith("test"));
+
+            Object instance = klass.newInstance();
+            for (Method method : klass.getDeclaredMethods()) {
+                if (Modifier.isStatic(method.getModifiers())) continue;
+                Test testAnnotation = method.getAnnotation(Test.class);
+                if (testAnnotation == null) continue;
+                method.setAccessible(true);
+
+                // get test name
+                final String testName = method.getName();
+
+                // get test class and shit
+                String testClassName = klass.getName() + "$" + testAnnotation.testClass();
+                String abstractionImplName = klass.getName() + "$" + testAnnotation.abstractionImpl();
+
+                // load hooks
+                List<Object> hooks = new ArrayList<>();
+                for (String partialHookClassName : testAnnotation.hooks()) {
+                    String hookClassName = klass.getName() + "$" + partialHookClassName;
+                    Class<?> hookClass = ReflectUtil.getClass(hookClassName);
+                    if (hookClass == null || !DependencyAnalysisHook.class.isAssignableFrom(hookClass))
+                        throw new IllegalArgumentException("Couldn't find hook class by name " + abstractionImplName);
+                    if (debug)
+                        System.err.println("DEBUG Test " + testName + ": Found hook " + hookClass);
+                    Object hook = hookClass.getConstructor().newInstance();
+                    abstractionManager.addAnalysisHook((DependencyAnalysisHook) hook);
+                    hooks.add(hook);
+                }
+
+                // load, register and create abstraction impl
+                Class<?> implClass = ReflectUtil.getClass(abstractionImplName);
+                if (implClass == null)
+                    throw new IllegalArgumentException("Couldn't find implementation class by name " + abstractionImplName);
+                if (debug)
+                    System.err.println("DEBUG Test " + testName + ": Found abstraction impl " + implClass);
+                abstractionManager.registerImpl(implClass);
+                Object implInstance = implClass.getConstructor().newInstance();
+
+                // load and create test class
+                Class<?> testClass = abstractionManager.findClass(testClassName);
+                if (testClass == null)
+                    throw new IllegalArgumentException("Couldn't find test class by name " + abstractionImplName);
+                if (debug)
+                    System.err.println("DEBUG Test " + testName + ": Found test " + implClass);
+                Object testInstance = testClass.getConstructor().newInstance();
+
+                // order arguments
+                Object[] args = new Object[method.getParameterTypes().length];
+                for (int i = 0, n = method.getParameterTypes().length; i < n; i++) {
+                    Class<?> type = method.getParameterTypes()[i];
+
+                    if (type.isAssignableFrom(implClass)) args[i] = implInstance;
+                    else if (type.isAssignableFrom(testClass)) args[i] = testInstance;
+                    else if (type.isAssignableFrom(AbstractionManager.class)) args[i] = abstractionManager;
+                    else for (var hook : hooks) if (type.isAssignableFrom(hook.getClass())) args[i] = hook;
+                }
+
+                try {
+                    // invoke method
+                    method.invoke(instance, args);
+                } catch (InvocationTargetException e) {
+                    throw e.getCause();
+                }
+            }
+        } catch (Throwable t) {
+            if (t instanceof AssertionFailedError e)
+                throw e;
+            throw new RuntimeException("Error while running tests for " + klass, t);
+        }
+    }
 
     /**
      * Stringifies the given object reflectively.
@@ -59,6 +182,47 @@ public class TestSystem {
             return b.append("}").toString();
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    // Throw a new AssertionFailedError
+    public static void fail(String msg) {
+        throw new AssertionFailedError(msg);
+    }
+
+    public static void assertDependenciesEquals(Set<MethodDependency> actual, String... expected) {
+        if (expected.length != actual.size())
+            fail("Expected " + expected.length + " dependencies, got " + actual.size());
+
+        List<MethodDependency> list = new ArrayList<>(actual);
+        for (String str : expected) {
+            String[] split = str.split(" ");
+            boolean optional = split[0].equals("optional");
+            String p = split[1];
+            String[] split2 = p.split("\\.");
+            String cl = split2[0];
+            String name = split2[1];
+
+            MethodDependency found = null;
+            for (MethodDependency dependency : list) {
+                if (dependency.optional() == optional && dependency.info().name().equals(name) &&
+                        dependency.info().ownerClassName().endsWith(cl)) {
+                    found = dependency;
+                    break;
+                }
+            }
+
+            if (found == null) {
+                fail("Expected dependency " + str + ", actual: null");
+            }
+
+            // remove for later checks
+            list.remove(found);
+        }
+
+        // perform checks
+        if (!list.isEmpty()) {
+            fail("Expected " + expected.length + " dependencies to match, diff: " + list);
         }
     }
 

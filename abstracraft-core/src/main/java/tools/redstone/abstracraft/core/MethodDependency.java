@@ -5,15 +5,19 @@ package tools.redstone.abstracraft.core;
  */
 public record MethodDependency(
         boolean optional,
-        MethodInfo info,
-        // Details of the call of the method
-        MethodInfo calledIn
+        ReferenceInfo info,
+        Boolean implemented
 ) {
-    public MethodDependency asOptional(boolean opt) {
-        return new MethodDependency(opt, info, calledIn);
+    public MethodDependency asOptional(boolean optional) {
+        return new MethodDependency(optional, info, implemented);
     }
 
-    @Override
+    public boolean isImplemented(AbstractionManager abstractionManager) {
+        if (implemented != null)
+            return implemented;
+        return abstractionManager.isImplemented(info);
+    }
+
     public String toString() {
         return "MethodDependency(" + (optional ? "optional " : "required ") +
                 info.ownerClassName() + "." + info.name() +
