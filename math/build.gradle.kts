@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "tools.redstone.abstracraft"
-version = "unspecified"
+version = "1.0.0"
 
 repositories {
     mavenCentral()
