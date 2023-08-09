@@ -4,9 +4,7 @@ import tools.redstone.abstracraft.core.usage.Abstraction;
 import tools.redstone.abstracraft.math.Vec3d;
 
 public interface Entity extends Abstraction {
-    void kill();
-    void damage(double amount);
-    double getHealth();
-    Vec3d getPosition();
-    Vec3d getSpawnPosition();
+    default void kill() { unimplemented(); }
+    default void damage(float amount) { unimplemented(); }
+    default Vec3d getPosition() { return unimplemented(); }
 }

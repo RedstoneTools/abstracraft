@@ -11,6 +11,42 @@
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/abstractions" />
             <option value="$PROJECT_DIR$/core" />
+            <option value="$PROJECT_DIR$/implementations" />
+            <option value="$PROJECT_DIR$/math" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+      <GradleProjectSettings>
+        <compositeConfiguration>
+          <compositeBuild compositeDefinitionSource="SCRIPT">
+            <builds>
+              <build path="$PROJECT_DIR$/core" name="core">
+                <projects>
+                  <project path="$PROJECT_DIR$/core" />
+                </projects>
+              </build>
+              <build path="$PROJECT_DIR$/math" name="math">
+                <projects>
+                  <project path="$PROJECT_DIR$/math" />
+                </projects>
+              </build>
+              <build path="$PROJECT_DIR$/abstractions" name="abstractions">
+                <projects>
+                  <project path="$PROJECT_DIR$/abstractions" />
+                </projects>
+              </build>
+            </builds>
+          </compositeBuild>
+        </compositeConfiguration>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/implementations/abstracraft-1.18.2" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/abstractions" />
+            <option value="$PROJECT_DIR$/core" />
+            <option value="$PROJECT_DIR$/implementations/abstracraft-1.18.2" />
+            <option value="$PROJECT_DIR$/implementations/abstracraft-1.18.2/common" />
+            <option value="$PROJECT_DIR$/implementations/abstracraft-1.18.2/fabric" />
+            <option value="$PROJECT_DIR$/implementations/abstracraft-1.18.2/forge" />
             <option value="$PROJECT_DIR$/math" />
           </set>
         </option>
