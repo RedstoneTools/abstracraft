@@ -2,24 +2,24 @@ package tools.redstone.abstracraft.core;
 
 public class NotImplementedException extends RuntimeException {
 
-    private final ReferenceInfo method; // The method that wasn't implemented
+    private final ReferenceInfo ref; // The reference that wasn't implemented
 
     public NotImplementedException() {
         this(null);
     }
 
     public NotImplementedException(ReferenceInfo info) {
-        this.method = info;
+        this.ref = info;
     }
 
-    public ReferenceInfo getMethod() {
-        return method;
+    public ReferenceInfo getReference() {
+        return ref;
     }
 
     @Override
     public String getMessage() {
-        if (method == null) return null;
-        return "Method " + method + " is not implemented";
+        if (ref == null) return null;
+        return ref + " is not implemented";
     }
 
 }

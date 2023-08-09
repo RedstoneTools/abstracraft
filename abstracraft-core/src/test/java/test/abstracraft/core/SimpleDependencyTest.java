@@ -14,6 +14,9 @@ public class SimpleDependencyTest {
 
     /** Example abstraction */
     public interface Abc extends Abstraction {
+        String IMPLEMENTED = "ABC";
+        String UNIMPLEMENTED = null;
+        String UNIMPLEMENTED2 = null;
         default String a() { return unimplemented(); }
         default String b() { return unimplemented(); }
         default String c() { return unimplemented(); }
@@ -32,11 +35,14 @@ public class SimpleDependencyTest {
     /* --------------------------------------------------- */
 
     public interface Tests {
-        default String testA(Abc abc) { return null; }
-        default String testB(Abc abc) { return null;  }
-        default String testC(Abc abc) { return null;  }
-        default String testD(Abc abc) { return null;  }
+        String testA(Abc abc);
+        String testB(Abc abc);
+        String testC(Abc abc);
+        String testD(Abc abc);
         String testE(Abc abc);
+        String testF(Abc abc);
+        String testG(Abc abc);
+        String testH(Abc abc);
     }
 
     /** The class with test code */
@@ -69,6 +75,22 @@ public class SimpleDependencyTest {
             return Usage.optionally(() -> abc.e())
                     .orElse("ABC");
         }
+
+        @Override
+        public String testF(Abc abc) {
+            return Abc.IMPLEMENTED;
+        }
+
+        @Override
+        public String testG(Abc abc) {
+            return Usage.optionally(() -> Abc.UNIMPLEMENTED)
+                    .orElse("ABC");
+        }
+
+        @Override
+        public String testH(Abc abc) {
+            return Abc.UNIMPLEMENTED2;
+        }
     }
 
     @TestSystem.Test(testClass = "TestClass", abstractionImpl = "AbcImpl")
@@ -82,7 +104,10 @@ public class SimpleDependencyTest {
         Assertions.assertThrows(NotImplementedException.class, () -> testInstance.testC(abc));
         Assertions.assertThrows(NoneImplementedException.class, () -> testInstance.testD(abc));
         Assertions.assertEquals("ABC", testInstance.testE(abc));
-        TestSystem.assertDependenciesEquals(abstractionManager.getClassAnalysis(testInstance.getClass()).dependencies, "required Abc.a", "required Abc.b", "required Abc.d", "optional Abc.c", "optional Abc.e");
+        Assertions.assertDoesNotThrow(() -> testInstance.testF(abc));
+        Assertions.assertEquals("ABC", testInstance.testG(abc));
+        Assertions.assertThrows(NotImplementedException.class, () -> testInstance.testH(abc));
+        TestSystem.assertDependenciesEquals(abstractionManager.getClassAnalysis(testInstance.getClass()).dependencies, "required Abc.a", "required Abc.b", "required Abc.d", "optional Abc.c", "optional Abc.e", "optional Abc.UNIMPLEMENTED", "required Abc.UNIMPLEMENTED2");
     }
 
 }

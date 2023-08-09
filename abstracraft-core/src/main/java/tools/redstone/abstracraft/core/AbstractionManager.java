@@ -67,13 +67,13 @@ public class AbstractionManager {
     /**
      * Get the base abstraction class from the given interface.
      *
-     * @param startItf The starting interface.
+     * @param startClass The starting interface.
      * @return The base abstraction class/interface.
      */
-    public List<Class<?>> getApplicableAbstractionClasses(Class<?> startItf) {
-        Class<?> current = startItf;
+    public List<Class<?>> getApplicableAbstractionClasses(Class<?> startClass) {
+        Class<?> current = startClass;
         outer: while (current != null) {
-            if (CollectionUtil.anyMatch(current.getInterfaces(), i -> i == Abstraction.class))
+            if (current.isInterface())
                 break;
 
             // find next interface by finding the
@@ -85,11 +85,11 @@ public class AbstractionManager {
                 }
             }
 
-            throw new IllegalArgumentException(startItf + " is not an Abstraction class");
+            throw new IllegalArgumentException(startClass + " is not an Abstraction class");
         }
 
         if (current == null)
-            throw new IllegalArgumentException("Could not find base abstraction for " + startItf);
+            throw new IllegalArgumentException("Could not find base abstraction for " + startClass);
         return List.of(current);
     }
 

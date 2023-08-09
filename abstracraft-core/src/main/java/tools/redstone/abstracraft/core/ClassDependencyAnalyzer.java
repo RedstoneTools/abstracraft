@@ -168,13 +168,23 @@ public class ClassDependencyAnalyzer {
         }
     }
 
-    // Make a MethodInfo instance on the stack
+    // Make a ReferenceInfo to a method on the stack
     private static void makeMethodInfo(MethodVisitor visitor, String owner, String name, String desc, boolean isStatic) {
         visitor.visitLdcInsn(owner);
         visitor.visitLdcInsn(name);
         visitor.visitLdcInsn(desc);
         visitor.visitIntInsn(Opcodes.BIPUSH, isStatic ? 1 : 0);
         visitor.visitMethodInsn(Opcodes.INVOKESTATIC, TYPE_MethodInfo.getInternalName(), "forMethodInfo",
+                "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)L" + NAME_MethodInfo + ";", false);
+    }
+
+    // Make a ReferenceInfo to a field on the stack
+    private static void makeFieldInfo(MethodVisitor visitor, String owner, String name, String desc, boolean isStatic) {
+        visitor.visitLdcInsn(owner);
+        visitor.visitLdcInsn(name);
+        visitor.visitLdcInsn(desc);
+        visitor.visitIntInsn(Opcodes.BIPUSH, isStatic ? 1 : 0);
+        visitor.visitMethodInsn(Opcodes.INVOKESTATIC, TYPE_MethodInfo.getInternalName(), "forFieldInfo",
                 "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)L" + NAME_MethodInfo + ";", false);
     }
 
@@ -495,7 +505,6 @@ public class ClassDependencyAnalyzer {
 
             @Override
             public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
-                super.visitFieldInsn(opcode, owner, name, descriptor);
                 if (opcode == Opcodes.GETFIELD || opcode == Opcodes.GETSTATIC) {
                     var fieldInfo = ReferenceInfo.forFieldInfo(owner, name, descriptor, opcode == Opcodes.GETSTATIC);
 
@@ -510,7 +519,39 @@ public class ClassDependencyAnalyzer {
                     var analysis = publicReference(context, fieldInfo);
                     context.currentAnalysis().registerReference(analysis);
                     analysis.referenceRequired(context);
+
+                    /* Check for direct usage of dependencies */
+                    if (isDependencyReference(context, fieldInfo) && !specialMethods.contains(name)) {
+                        classAnalysis.dependencies.add(new MethodDependency(false, fieldInfo, null));
+
+                        // dont transform required if the method its called in
+                        // is a block used by Usage.optionally
+                        if (methodAnalysis.optionalReferenceNumber <= 0) {
+                            // insert runtime throw
+                            if (!abstractionManager.isImplemented(fieldInfo)) {
+                                addInsn(new InsnNode(-1) {
+                                    @Override
+                                    public void accept(MethodVisitor mv) {
+                                        if (methodAnalysis.optionalReferenceNumber < 0) {
+                                            mv.visitTypeInsn(Opcodes.NEW, NAME_NotImplementedException);
+                                            mv.visitInsn(Opcodes.DUP);
+                                            makeFieldInfo(mv, fieldInfo.ownerInternalName(), fieldInfo.name(), fieldInfo.desc(), fieldInfo.isStatic());
+                                            mv.visitMethodInsn(Opcodes.INVOKESPECIAL, NAME_NotImplementedException, "<init>", "(L" + NAME_MethodInfo + ";)V", false);
+                                            mv.visitInsn(Opcodes.ATHROW);
+                                        }
+                                    }
+                                });
+                            }
+                        }
+
+                        methodAnalysis.requiredDependencies.add(fieldInfo);
+                    }
+
+                    super.visitFieldInsn(opcode, owner, name, descriptor);
+                    return;
                 }
+
+                super.visitFieldInsn(opcode, owner, name, descriptor);
             }
 
             @Override
