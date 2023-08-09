@@ -363,6 +363,7 @@ public class AbstractionManager {
         }
     }
 
+    /** Allows dependencies which call to a class implementing the given interface */
     public static DependencyAnalysisHook checkDependenciesForInterface(final Class<?> itf, boolean includeFields) {
         final ClassInheritanceChecker checker = ClassInheritanceChecker.forClass(itf);
         return new DependencyAnalysisHook() {
@@ -370,11 +371,12 @@ public class AbstractionManager {
             public Boolean isDependencyCandidate(AnalysisContext context, ReferenceInfo ref) {
                 if (!includeFields && ref.isField())
                     return null;
-                return checker.from(ref.ownerClassName());
+                return checker.from(ref.ownerClassName()) ? true : null;
             }
         };
     }
 
+    /** Checks the bytecode and declaration class of methods to determine whether they are implemented */
     public static DependencyAnalysisHook checkForExplicitImplementation(Class<?> unimplementedProvidingItf) {
         final ClassInheritanceChecker checker = ClassInheritanceChecker.forClass(unimplementedProvidingItf);
         return new DependencyAnalysisHook() {
@@ -436,6 +438,7 @@ public class AbstractionManager {
         };
     }
 
+    /** Checks static field dependencies for a not null value to determine if they're implemented */
     public static DependencyAnalysisHook checkStaticFieldsNotNull() {
         return new DependencyAnalysisHook() {
             @Override
