@@ -1,4 +1,4 @@
-package tools.redstone.abstracraft.core.util;
+package tools.redstone.abstracraft.util;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;

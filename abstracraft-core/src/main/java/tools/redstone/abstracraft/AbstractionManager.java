@@ -1,10 +1,11 @@
-package tools.redstone.abstracraft.core;
+package tools.redstone.abstracraft;
 
 import org.objectweb.asm.*;
+import tools.redstone.abstracraft.analysis.*;
 import tools.redstone.abstracraft.core.analysis.*;
-import tools.redstone.abstracraft.core.usage.Abstraction;
-import tools.redstone.abstracraft.core.util.ASMUtil;
-import tools.redstone.abstracraft.core.util.ReflectUtil;
+import tools.redstone.abstracraft.usage.Abstraction;
+import tools.redstone.abstracraft.util.ASMUtil;
+import tools.redstone.abstracraft.util.ReflectUtil;
 
 import java.io.InputStream;
 import java.lang.reflect.Field;

@@ -2,11 +2,11 @@ package test.abstracraft.core;
 
 import org.junit.jupiter.api.function.Executable;
 import org.opentest4j.AssertionFailedError;
-import tools.redstone.abstracraft.core.*;
-import tools.redstone.abstracraft.core.analysis.DependencyAnalysisHook;
-import tools.redstone.abstracraft.core.analysis.MethodDependency;
-import tools.redstone.abstracraft.core.usage.Abstraction;
-import tools.redstone.abstracraft.core.util.ReflectUtil;
+import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.analysis.DependencyAnalysisHook;
+import tools.redstone.abstracraft.analysis.MethodDependency;
+import tools.redstone.abstracraft.usage.Abstraction;
+import tools.redstone.abstracraft.util.ReflectUtil;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

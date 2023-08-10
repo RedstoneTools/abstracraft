@@ -1,4 +1,4 @@
-package tools.redstone.abstracraft.core.usage;
+package tools.redstone.abstracraft.usage;
 
 public class NoneImplementedException extends RuntimeException {
     public NoneImplementedException(String message) {

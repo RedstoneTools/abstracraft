@@ -1,4 +1,4 @@
-package tools.redstone.abstracraft.core.analysis;
+package tools.redstone.abstracraft.analysis;
 
 import java.util.List;
 

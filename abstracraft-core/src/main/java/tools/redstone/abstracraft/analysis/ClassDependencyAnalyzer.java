@@ -1,23 +1,23 @@
-package tools.redstone.abstracraft.core.analysis;
+package tools.redstone.abstracraft.analysis;
 
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
-import tools.redstone.abstracraft.core.AbstractionManager;
-import tools.redstone.abstracraft.core.usage.NotImplementedException;
-import tools.redstone.abstracraft.core.usage.Usage;
-import tools.redstone.abstracraft.core.util.ASMUtil;
-import tools.redstone.abstracraft.core.util.CollectionUtil;
-import tools.redstone.abstracraft.core.util.Container;
-import tools.redstone.abstracraft.core.util.ReflectUtil;
+import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.usage.NotImplementedException;
+import tools.redstone.abstracraft.usage.Usage;
+import tools.redstone.abstracraft.util.ASMUtil;
+import tools.redstone.abstracraft.util.CollectionUtil;
+import tools.redstone.abstracraft.util.Container;
+import tools.redstone.abstracraft.util.ReflectUtil;
 
 import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static tools.redstone.abstracraft.core.util.CollectionUtil.addIfNotNull;
+import static tools.redstone.abstracraft.util.CollectionUtil.addIfNotNull;
 
 /**
  * Analyzes given class bytes for usage of abstraction methods.

@@ -1,4 +1,4 @@
-package tools.redstone.abstracraft.core.usage;
+package tools.redstone.abstracraft.usage;
 
 /** Purely to denote that a class is an abstraction */
 public interface Abstraction {

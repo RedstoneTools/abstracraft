@@ -1,14 +1,14 @@
 package test.abstracraft.core;
 
 import org.objectweb.asm.Type;
-import tools.redstone.abstracraft.core.*;
-import tools.redstone.abstracraft.core.analysis.AnalysisContext;
-import tools.redstone.abstracraft.core.analysis.ClassDependencyAnalyzer;
-import tools.redstone.abstracraft.core.analysis.DependencyAnalysisHook;
-import tools.redstone.abstracraft.core.analysis.ReferenceInfo;
-import tools.redstone.abstracraft.core.usage.Abstraction;
-import tools.redstone.abstracraft.core.usage.Usage;
-import tools.redstone.abstracraft.core.util.ASMUtil;
+import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.analysis.AnalysisContext;
+import tools.redstone.abstracraft.analysis.ClassDependencyAnalyzer;
+import tools.redstone.abstracraft.analysis.DependencyAnalysisHook;
+import tools.redstone.abstracraft.analysis.ReferenceInfo;
+import tools.redstone.abstracraft.usage.Abstraction;
+import tools.redstone.abstracraft.usage.Usage;
+import tools.redstone.abstracraft.util.ASMUtil;
 
 import java.util.*;
 

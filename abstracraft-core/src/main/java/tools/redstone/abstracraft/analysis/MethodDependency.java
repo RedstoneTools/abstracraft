@@ -1,6 +1,6 @@
-package tools.redstone.abstracraft.core.analysis;
+package tools.redstone.abstracraft.analysis;
 
-import tools.redstone.abstracraft.core.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionManager;
 
 /**
  * Represents the dependency of a piece of code on a specific method.
