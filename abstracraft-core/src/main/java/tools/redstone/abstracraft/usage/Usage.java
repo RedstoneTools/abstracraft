@@ -38,14 +38,8 @@ public class Usage {
         }
 
         // Substitute for `oneOf(Supplier<T>...)` when at least one is present
-        public static Object onePresent(Supplier<?>... suppliers) {
-            for (Supplier<?> supplier : suppliers) {
-                if (supplier != null) {
-                    return supplier.get();
-                }
-            }
-
-            throw new NoneImplementedException("");
+        public static Object onePresent(Supplier<?>[] suppliers, int supplierIndex) {
+            return suppliers[supplierIndex].get();
         }
 
         // Substitute for `oneOf(Supplier<T>...)` when none are present

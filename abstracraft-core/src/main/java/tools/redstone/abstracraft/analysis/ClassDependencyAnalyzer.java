@@ -318,7 +318,9 @@ public class ClassDependencyAnalyzer {
                     Lambda chosen = null;                                            // The chosen lambda
                     List<MethodDependency> chosenDependencies = new ArrayList<>();   // The method dependencies of the chosen lambda
                     List<MethodDependency> optionalDependencies = new ArrayList<>(); // The optional dependencies of this switch
-                    for (Lambda lambda : lambdas) {
+                    int i = 0;
+                    for (int n = lambdas.length; i < n; i++) {
+                        Lambda lambda = lambdas[i];
                         ReferenceAnalysis analysis;
                         analysis = publicReference(context, lambda.methodInfo);
 
@@ -340,6 +342,8 @@ public class ClassDependencyAnalyzer {
                         if (dependencies != null) {
                             CollectionUtil.mapImmediate(dependencies, dep -> new MethodDependency(false, dep, false), classAnalysis.dependencies, chosenDependencies);
                         }
+
+                        break;
                     }
 
                     // register switch
@@ -347,8 +351,11 @@ public class ClassDependencyAnalyzer {
 
                     // replace method call
                     if (chosen != null) {
+                        // push index into supplier array
+                        super.visitIntInsn(Opcodes.SIPUSH, i);
+
                         super.visitMethodInsn(Opcodes.INVOKESTATIC, NAME_InternalSubstituteMethods,
-                                "onePresent", "([Ljava/util/function/Supplier;)Ljava/lang/Object;",
+                                "onePresent", "([Ljava/util/function/Supplier;I)Ljava/lang/Object;",
                                 false);
                     } else {
                         super.visitMethodInsn(Opcodes.INVOKESTATIC, NAME_InternalSubstituteMethods,
