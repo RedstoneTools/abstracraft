@@ -2,7 +2,6 @@ package tools.redstone.abstracraft;
 
 import org.objectweb.asm.*;
 import tools.redstone.abstracraft.analysis.*;
-import tools.redstone.abstracraft.core.analysis.*;
 import tools.redstone.abstracraft.usage.Abstraction;
 import tools.redstone.abstracraft.util.ASMUtil;
 import tools.redstone.abstracraft.util.ReflectUtil;
@@ -28,13 +27,13 @@ public class AbstractionManager {
     record DefaultImplAnalysis(Set<ReferenceInfo> unimplementedMethods) { }
 
     Predicate<String> classAuditPredicate = s -> true;                                                                  // The predicate for abstraction class names.
-    Predicate<ClassDependencyAnalyzer.ReferenceAnalysis> requiredMethodPredicate = m -> m.optionalReferenceNumber <= 0; // The predicate for required methods.
+    Predicate<ReferenceAnalysis> requiredMethodPredicate = m -> m.optionalReferenceNumber <= 0; // The predicate for required methods.
     final List<DependencyAnalysisHook> analysisHooks = new ArrayList<>();                                               // The global dependency analysis hooks
 
     final Map<Class<?>, Class<?>> implByBaseClass = new HashMap<>();                                                    // The registered implementation classes by base class
     final Map<ReferenceInfo, Boolean> implementedCache = new HashMap<>();                                               // A cache to store whether a specific method is implemented for fast access
 
-    final Map<ReferenceInfo, ClassDependencyAnalyzer.ReferenceAnalysis> refAnalysisMap = new HashMap<>();               // All analyzed methods by their descriptor
+    final Map<ReferenceInfo, ReferenceAnalysis> refAnalysisMap = new HashMap<>();               // All analyzed methods by their descriptor
     final Map<String, ClassDependencyAnalyzer> analyzerMap = new HashMap<>();                                           // All analyzers by class name
     final ClassLoader transformingClassLoader;
 
@@ -49,10 +48,16 @@ public class AbstractionManager {
                 getClass().getClassLoader(),
                 // transformer
                 ((name, reader, writer) -> {
+                    System.out.println("LOADER DEBUG loading class " + name);
+                    long t1 = System.currentTimeMillis();
+
                     var analyzer = analyzer(name, true);
                     if (analyzer.getClassAnalysis() == null || !analyzer.getClassAnalysis().completed)
                         analyzer.analyzeAndTransform();
                     analyzer.getClassNode().accept(writer);
+
+                    long t2 = System.currentTimeMillis();
+                    System.out.println("LOADER DEBUG transforming class took " + (t2 - t1) + "ms");
                 }), ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, true);
 
         this.partialAnalyzer = new ClassDependencyAnalyzer(this, null);
@@ -63,7 +68,7 @@ public class AbstractionManager {
         return this;
     }
 
-    public AbstractionManager setRequiredMethodPredicate(Predicate<ClassDependencyAnalyzer.ReferenceAnalysis> requiredMethodPredicate) {
+    public AbstractionManager setRequiredMethodPredicate(Predicate<ReferenceAnalysis> requiredMethodPredicate) {
         this.requiredMethodPredicate = requiredMethodPredicate;
         return this;
     }
@@ -72,7 +77,7 @@ public class AbstractionManager {
         return classAuditPredicate;
     }
 
-    public Predicate<ClassDependencyAnalyzer.ReferenceAnalysis> getRequiredMethodPredicate() {
+    public Predicate<ReferenceAnalysis> getRequiredMethodPredicate() {
         return requiredMethodPredicate;
     }
 
@@ -258,11 +263,11 @@ public class AbstractionManager {
         return analyzer(klass.getName(), false);
     }
 
-    public ClassDependencyAnalyzer.ReferenceAnalysis getMethodAnalysis(ReferenceInfo info) {
+    public ReferenceAnalysis getMethodAnalysis(ReferenceInfo info) {
         return refAnalysisMap.get(info);
     }
 
-    public ClassDependencyAnalyzer.ReferenceAnalysis registerAnalysis(ClassDependencyAnalyzer.ReferenceAnalysis analysis) {
+    public ReferenceAnalysis registerAnalysis(ReferenceAnalysis analysis) {
         refAnalysisMap.put(analysis.ref, analysis);
         return analysis;
     }
@@ -286,7 +291,7 @@ public class AbstractionManager {
      * @param info The method to analyze.
      * @return The analysis or null.
      */
-    public ClassDependencyAnalyzer.ReferenceAnalysis publicReference(AnalysisContext context, ReferenceInfo info) {
+    public ReferenceAnalysis publicReference(AnalysisContext context, ReferenceInfo info) {
         // check for cached
         var analysis = getMethodAnalysis(info);
         if (analysis != null && analysis.complete && !analysis.partial)
@@ -294,7 +299,7 @@ public class AbstractionManager {
 
         // fields are always partial
         if (info.isField()) {
-            analysis = new ClassDependencyAnalyzer.ReferenceAnalysis(partialAnalyzer, info);
+            analysis = new ReferenceAnalysis(partialAnalyzer, info);
             analysis.partial = true;
             analysis.complete = true;
             refAnalysisMap.put(info, analysis);
@@ -306,7 +311,7 @@ public class AbstractionManager {
         if (analyzer == null) {
             if (analysis != null)
                 return analysis;
-            analysis = new ClassDependencyAnalyzer.ReferenceAnalysis(partialAnalyzer, info);
+            analysis = new ReferenceAnalysis(partialAnalyzer, info);
             analysis.partial = true;
             analysis.complete = true;
             refAnalysisMap.put(info, analysis);

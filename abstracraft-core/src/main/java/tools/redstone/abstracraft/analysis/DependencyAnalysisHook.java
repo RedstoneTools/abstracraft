@@ -23,10 +23,10 @@ public interface DependencyAnalysisHook {
     }
 
     // When a method is referenced in a required block
-    default ReferenceHook requiredReference(AnalysisContext context, ClassDependencyAnalyzer.ReferenceAnalysis called) { return null; }
+    default ReferenceHook requiredReference(AnalysisContext context, ReferenceAnalysis called) { return null; }
 
     // When a method is referenced in an optional block
-    default ReferenceHook optionalReference(AnalysisContext context, ClassDependencyAnalyzer.ReferenceAnalysis called) { return null; }
+    default ReferenceHook optionalReference(AnalysisContext context, ReferenceAnalysis called) { return null; }
 
     // When a new method is entered to be analyzed
     default void enterMethod(AnalysisContext context) { }

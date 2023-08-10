@@ -14,10 +14,7 @@ import tools.redstone.abstracraft.util.ReflectUtil;
 
 import java.lang.reflect.Modifier;
 import java.util.*;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
-import static tools.redstone.abstracraft.util.CollectionUtil.addIfNotNull;
 
 /**
  * Analyzes given class bytes for usage of abstraction methods.
@@ -30,104 +27,16 @@ public class ClassDependencyAnalyzer {
 
     // The result of the dependency analysis on a class
     public static class ClassAnalysis {
-        public boolean completed = false;                                               // Whether this analysis is complete
+        public boolean completed = false;                                                     // Whether this analysis is complete
         public final Map<ReferenceInfo, ReferenceAnalysis> analyzedMethods = new HashMap<>(); // All analysis objects for the methods in this class
-        public Set<MethodDependency> dependencies = new HashSet<>();                    // All method dependencies recorded in this class
-        public List<OneOfDependency> switchDependencies = new ArrayList<>();            // All oneOf dependencies
+        public List<Dependency> dependencies = new ArrayList<>();                             // All dependencies recorded in this class
 
         // Check whether all direct and switch dependencies are implemented
         public boolean areAllImplemented(AbstractionManager abstractionManager) {
-            for (MethodDependency dep : dependencies)
+            for (Dependency dep : dependencies)
                 if (!dep.isImplemented(abstractionManager))
                     return false;
-            for (OneOfDependency dep : switchDependencies)
-                if (!dep.implemented())
-                    return false;
             return true;
-        }
-    }
-
-    public static class ReferenceAnalysis {
-        public final ClassDependencyAnalyzer analyzer;                            // The analyzer instance.
-        public final ReferenceInfo ref;                                           // The reference this analysis covers
-        public List<ReferenceInfo> requiredDependencies = new ArrayList<>();      // All recorded required dependencies used by this method
-        public int optionalReferenceNumber = 0;                                   // Whether this method is referenced in an optionally() block
-        public List<ReferenceAnalysis> allAnalyzedReferences = new ArrayList<>(); // The analysis objects of all methods/fields normally called by this method
-        public boolean complete = false;                                          // Whether this analysis has completed all mandatory tasks
-        public boolean partial = false;                                           // Whether this analysis is used purely to store meta or if it is actually analyzed with bytecode analysis
-        public final boolean field;
-
-        public Set<DependencyAnalysisHook> hooksSet = new HashSet<>();
-        public List<DependencyAnalysisHook.ReferenceHook> refHooks = new ArrayList<>();
-
-        public ReferenceAnalysis(ClassDependencyAnalyzer analyzer, ReferenceInfo ref) {
-            this.analyzer = analyzer;
-            this.ref = ref;
-            this.field = ref.isField();
-        }
-
-        // Checked refHooks.add
-        private void addRefHook(DependencyAnalysisHook hook, Supplier<DependencyAnalysisHook.ReferenceHook> supplier) {
-            // create new ref hook
-            addIfNotNull(refHooks, supplier.get());
-        }
-
-        // Register and propagate that this method is part of an optional block
-        public void referenceOptional(AnalysisContext context) {
-            for (var hook : analyzer.hooks) addRefHook(hook, () -> hook.optionalReference(context, this));
-            for (var refHook : refHooks) refHook.optionalReference(context);
-
-            this.optionalReferenceNumber += 2;
-            for (ReferenceAnalysis analysis : allAnalyzedReferences) {
-                analysis.referenceOptional(context);
-            }
-        }
-
-        // Register and propagate that this method is required
-        public void referenceRequired(AnalysisContext context) {
-            for (var hook : analyzer.hooks) addRefHook(hook, () -> hook.requiredReference(context, this));
-            for (var refHook : refHooks) refHook.requiredReference(context);
-
-            this.optionalReferenceNumber -= 1;
-            for (ReferenceAnalysis analysis : allAnalyzedReferences) {
-                analysis.referenceRequired(context);
-            }
-        }
-
-        // Register and propagate that this method was dropped from an optionally() block
-        public void optionalReferenceDropped(AnalysisContext context) {
-            for (var refHook : refHooks) refHook.optionalBlockDiscarded(context);
-            for (ReferenceAnalysis analysis : allAnalyzedReferences) {
-                analysis.optionalReferenceDropped(context);
-            }
-        }
-
-        // Finish analysis of the method
-        public void postAnalyze() {
-            for (var refHook : refHooks) refHook.postAnalyze();
-            for (ReferenceAnalysis analysis : allAnalyzedReferences) {
-                analysis.postAnalyze();
-            }
-        }
-
-        public void registerReference(ReferenceInfo info) {
-            addIfNotNull(allAnalyzedReferences, analyzer.getReferenceAnalysis(info));
-        }
-
-        public void registerReference(ReferenceAnalysis analysis) {
-            allAnalyzedReferences.add(analysis);
-        }
-
-        public boolean isPartial() {
-            return partial;
-        }
-
-        public boolean isComplete() {
-            return complete;
-        }
-
-        public boolean isField() {
-            return field;
         }
     }
 
@@ -434,7 +343,7 @@ public class ClassDependencyAnalyzer {
                     }
 
                     // register switch
-                    classAnalysis.switchDependencies.add(new OneOfDependency(chosenDependencies, optionalDependencies, chosen != null));
+                    classAnalysis.dependencies.add(new OneOfDependency(chosenDependencies, optionalDependencies, chosen != null));
 
                     // replace method call
                     if (chosen != null) {
@@ -643,27 +552,31 @@ public class ClassDependencyAnalyzer {
 
                 // filter dependencies
                 classAnalysis.dependencies = classAnalysis.dependencies.stream()
-                        .map(d -> d.optional() ? d : d.asOptional(getReferenceAnalysis(d.info()).optionalReferenceNumber >= 0))
-                        .collect(Collectors.toSet());
+                        .map(d1 -> d1 instanceof MethodDependency d ? (d.optional() ? d : d.asOptional(getReferenceAnalysis(d.info()).optionalReferenceNumber >= 0)) : d1)
+                        .collect(Collectors.toList());
 
                 // reduce dependencies
-                Set<MethodDependency> finalDependencySet = new HashSet<>();
-                for (MethodDependency dependency : classAnalysis.dependencies) {
-                    final MethodDependency mirror = dependency.asOptional(!dependency.optional());
+                Set<Dependency> finalDependencySet = new HashSet<>();
+                for (Dependency dep : classAnalysis.dependencies) {
+                    if (dep instanceof MethodDependency dependency) {
+                        final MethodDependency mirror = dependency.asOptional(!dependency.optional());
 
-                    if (!dependency.optional()) {
-                        finalDependencySet.remove(mirror);
-                        finalDependencySet.add(dependency);
-                        continue;
-                    }
+                        if (!dependency.optional()) {
+                            finalDependencySet.remove(mirror);
+                            finalDependencySet.add(dependency);
+                            continue;
+                        }
 
-                    if (!finalDependencySet.contains(mirror)) {
-                        finalDependencySet.add(dependency);
-                        continue;
+                        if (!finalDependencySet.contains(mirror)) {
+                            finalDependencySet.add(dependency);
+                            continue;
+                        }
+                    } else {
+                        finalDependencySet.add(dep);
                     }
                 }
 
-                classAnalysis.dependencies = finalDependencySet;
+                classAnalysis.dependencies = new ArrayList<>(finalDependencySet);
 
                 // mark complete
                 classAnalysis.completed = true;

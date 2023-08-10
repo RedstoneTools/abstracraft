@@ -44,7 +44,7 @@ public class AnalysisContext {
         return analysisStack.peek();
     }
 
-    public ClassDependencyAnalyzer.ReferenceAnalysis currentAnalysis() {
+    public ReferenceAnalysis currentAnalysis() {
         var curr = currentMethod();
         if (curr == null)
             return null;
