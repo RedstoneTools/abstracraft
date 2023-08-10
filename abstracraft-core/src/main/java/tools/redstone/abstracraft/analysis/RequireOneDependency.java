@@ -8,7 +8,7 @@ import java.util.Objects;
 /**
  * Records the result of a dependency switch.
  */
-public record OneOfDependency(List<MethodDependency> dependencies, List<MethodDependency> optionalDependencies, boolean implemented) implements Dependency {
+public record RequireOneDependency(List<MethodDependency> dependencies, List<MethodDependency> optionalDependencies, boolean implemented) implements Dependency {
     @Override
     public boolean isImplemented(AbstractionManager manager) {
         return this.implemented;

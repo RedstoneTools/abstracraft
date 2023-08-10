@@ -6,7 +6,7 @@ import tools.redstone.abstracraft.AbstractionManager;
 import tools.redstone.abstracraft.analysis.Dependency;
 import tools.redstone.abstracraft.analysis.DependencyAnalysisHook;
 import tools.redstone.abstracraft.analysis.MethodDependency;
-import tools.redstone.abstracraft.analysis.OneOfDependency;
+import tools.redstone.abstracraft.analysis.RequireOneDependency;
 import tools.redstone.abstracraft.usage.Abstraction;
 import tools.redstone.abstracraft.util.ReflectUtil;
 
@@ -245,7 +245,7 @@ public class TestSystem {
             // check for none present
             if (split[0].equals("none")) {
                 for (Dependency dep : list) {
-                    if (!(dep instanceof OneOfDependency dependency)) continue;
+                    if (!(dep instanceof RequireOneDependency dependency)) continue;
                     if (!dependency.implemented()) {
                         found = dependency;
                         break;
@@ -258,7 +258,7 @@ public class TestSystem {
                         .toList();
 
                 for (Dependency dep : list) {
-                    if (!(dep instanceof OneOfDependency dependency)) continue;
+                    if (!(dep instanceof RequireOneDependency dependency)) continue;
                     if (isDependenciesEqual(dependency.dependencies(), dependencies.toArray(new String[0]))) {
                         found = dependency;
                         break;

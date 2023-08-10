@@ -312,7 +312,7 @@ public class ClassDependencyAnalyzer {
                 }
 
                 // check for Usage.oneOf(Optional<T>...)
-                if (NAME_Usage.equals(owner) && "requireAtLeastOne".equals(name) && "([Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)) {
+                if (NAME_Usage.equals(owner) && "either".equals(name) && "([Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)) {
                     // get array of lambdas
                     Lambda[] lambdas = ReflectUtil.arrayCast((Object[]) computeStack.pop(), Lambda.class);
                     Lambda chosen = null;                                            // The chosen lambda
@@ -347,7 +347,7 @@ public class ClassDependencyAnalyzer {
                     }
 
                     // register switch
-                    classAnalysis.dependencies.add(new OneOfDependency(chosenDependencies, optionalDependencies, chosen != null));
+                    classAnalysis.dependencies.add(new RequireOneDependency(chosenDependencies, optionalDependencies, chosen != null));
 
                     // replace method call
                     if (chosen != null) {

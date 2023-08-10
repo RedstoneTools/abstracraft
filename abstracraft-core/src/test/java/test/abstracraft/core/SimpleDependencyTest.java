@@ -62,7 +62,7 @@ public class SimpleDependencyTest {
         }
 
         public String testB(Abc abc) {
-            return Usage.requireAtLeastOne(() -> deep(abc), abc::b, abc::d);
+            return Usage.either(() -> deep(abc), abc::b, abc::d);
         }
 
         @Override
@@ -72,7 +72,7 @@ public class SimpleDependencyTest {
 
         @Override
         public String testD(Abc abc) {
-            return Usage.requireAtLeastOne(abc::b, abc::c);
+            return Usage.either(abc::b, abc::c);
         }
 
         @Override
