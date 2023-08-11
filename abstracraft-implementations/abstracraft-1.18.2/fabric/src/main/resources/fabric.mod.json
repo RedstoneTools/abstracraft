@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "abstracraft_1_18_2",
+  "version": "${version}",
+  "name": "abstracraft-1.18.2",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "Unlicense",
+  "icon": "icon.png",
+  "environment": "*",
+  "entrypoints": {},
+  "mixins": [
+    "abstracraft_1_18_2.mixins.json",
+    "abstracraft_1_18_2-common.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.14.22",
+    "minecraft": ">=1.18.2"
+  }
+}

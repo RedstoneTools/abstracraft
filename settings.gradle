@@ -1,0 +1,19 @@
+pluginManagement {
+    repositories {
+        maven { url "https://maven.fabricmc.net/" }
+        maven { url "https://maven.architectury.dev/" }
+        maven { url "https://maven.minecraftforge.net/" }
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = "abstracraft"
+
+include ":abstracraft-core"
+include ":abstracraft-math"
+include ":abstracraft-abstractions"
+include ":abstracraft-implementations"
+include ":abstracraft-implementations:abstracraft-1.18.2"
+include ":abstracraft-implementations:abstracraft-1.18.2:common"
+include ":abstracraft-implementations:abstracraft-1.18.2:fabric"
+include ":abstracraft-implementations:abstracraft-1.18.2:forge"
