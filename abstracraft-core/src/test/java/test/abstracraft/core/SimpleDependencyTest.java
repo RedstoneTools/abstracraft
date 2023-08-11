@@ -62,7 +62,7 @@ public class SimpleDependencyTest {
         }
 
         public String testB(Abc abc) {
-            return Usage.requireAtLeastOne(() -> deep(abc), abc::b, abc::d);
+            return Usage.either(() -> deep(abc), abc::b, abc::d);
         }
 
         @Override
@@ -72,7 +72,7 @@ public class SimpleDependencyTest {
 
         @Override
         public String testD(Abc abc) {
-            return Usage.requireAtLeastOne(abc::b, abc::c);
+            return Usage.either(abc::b, abc::c);
         }
 
         @Override
@@ -106,13 +106,14 @@ public class SimpleDependencyTest {
         Assertions.assertFalse(abstractionManager.allImplemented(testInstance.getClass()));
         Assertions.assertDoesNotThrow(() -> testInstance.testA(abc));
         Assertions.assertDoesNotThrow(() -> testInstance.testB(abc));
+        Assertions.assertEquals(abc.d(), testInstance.testB(abc));
         Assertions.assertThrows(NotImplementedException.class, () -> testInstance.testC(abc));
         Assertions.assertThrows(NoneImplementedException.class, () -> testInstance.testD(abc));
         Assertions.assertEquals("ABC", testInstance.testE(abc));
         Assertions.assertDoesNotThrow(() -> testInstance.testF(abc));
         Assertions.assertEquals("ABC", testInstance.testG(abc));
         Assertions.assertThrows(NotImplementedException.class, () -> testInstance.testH(abc));
-        TestSystem.assertDependenciesEquals(abstractionManager.getClassAnalysis(testInstance.getClass()).dependencies, "required Abc.a", "required Abc.b", "required Abc.d", "optional Abc.c", "optional Abc.e", "optional Abc.UNIMPLEMENTED", "required Abc.UNIMPLEMENTED2");
+        TestSystem.assertDependenciesEquals(abstractionManager.getClassAnalysis(testInstance.getClass()).dependencies, "required Abc.a", "required Abc.b", "required Abc.d", "optional Abc.c", "optional Abc.e", "optional Abc.UNIMPLEMENTED", "required Abc.UNIMPLEMENTED2", "none", "one Abc.d");
     }
 
 }

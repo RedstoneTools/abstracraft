@@ -2,10 +2,7 @@ package test.abstracraft.core;
 
 import org.objectweb.asm.Type;
 import tools.redstone.abstracraft.AbstractionManager;
-import tools.redstone.abstracraft.analysis.AnalysisContext;
-import tools.redstone.abstracraft.analysis.ClassDependencyAnalyzer;
-import tools.redstone.abstracraft.analysis.DependencyAnalysisHook;
-import tools.redstone.abstracraft.analysis.ReferenceInfo;
+import tools.redstone.abstracraft.analysis.*;
 import tools.redstone.abstracraft.usage.Abstraction;
 import tools.redstone.abstracraft.usage.Usage;
 import tools.redstone.abstracraft.util.ASMUtil;
@@ -62,7 +59,7 @@ public class ArgumentHookTest {
 
         final Map<ReferenceInfo, ReferenceHook> referenceHooksByField = new HashMap<>();
 
-        public ReferenceHook refHook(AnalysisContext context, ClassDependencyAnalyzer.ReferenceAnalysis called, boolean optional) {
+        public ReferenceHook refHook(AnalysisContext context, ReferenceAnalysis called, boolean optional) {
             if (!called.isField())
                 return null;
             ReferenceInfo fieldInfo = called.ref;
@@ -106,12 +103,12 @@ public class ArgumentHookTest {
         }
 
         @Override
-        public ReferenceHook optionalReference(AnalysisContext context, ClassDependencyAnalyzer.ReferenceAnalysis called) {
+        public ReferenceHook optionalReference(AnalysisContext context, ReferenceAnalysis called) {
             return refHook(context, called, true);
         }
 
         @Override
-        public ReferenceHook requiredReference(AnalysisContext context, ClassDependencyAnalyzer.ReferenceAnalysis called) {
+        public ReferenceHook requiredReference(AnalysisContext context, ReferenceAnalysis called) {
             return refHook(context, called, false);
         }
     }

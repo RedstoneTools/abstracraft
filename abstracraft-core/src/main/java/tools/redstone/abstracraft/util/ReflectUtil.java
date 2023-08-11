@@ -218,7 +218,7 @@ public class ReflectUtil {
                 Class<?> klass = ReflectUtil.findLoadedClass(this, name);
                 if (klass != null) {
                     if (warnLoaded && klass.getClassLoader() != this) {
-                        System.err.println("WARNING Found loaded class " + name + " in loader " + klass.getClassLoader());
+                        System.out.println("WARNING Found loaded class " + name + " in loader " + klass.getClassLoader());
                     }
 
                     return klass;

@@ -31,7 +31,7 @@ public class CollectionUtil {
     }
 
     @SafeVarargs
-    public static <T, T2> void mapImmediate(Collection<T> list, Function<T, T2> mapper, Collection<T2>... dest) {
+    public static <T, T2> void mapImmediate(Collection<T> list, Function<T, T2> mapper, Collection<? super T2>... dest) {
         for (T v1 : list) {
             T2 val = mapper.apply(v1);
             for (var l : dest)
