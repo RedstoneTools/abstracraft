@@ -1,6 +1,4 @@
-package tools.redstone.abstracraft.implementation;
-
-import tools.redstone.abstracraft.abstractions.Player;
+package tools.redstone.abstracraft.entity;
 
 public class PlayerImpl extends EntityImpl implements Player {
     private final net.minecraft.world.entity.player.Player mcPlayer;
@@ -9,10 +7,5 @@ public class PlayerImpl extends EntityImpl implements Player {
         super(mcPlayer);
 
         this.mcPlayer = mcPlayer;
-    }
-
-    @Override
-    public float getHealth() {
-        return mcPlayer.getHealth();
     }
 }

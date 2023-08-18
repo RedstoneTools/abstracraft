@@ -1,7 +1,5 @@
-package tools.redstone.abstracraft.implementation;
+package tools.redstone.abstracraft.entity;
 
-import net.minecraft.world.damagesource.DamageSource;
-import tools.redstone.abstracraft.abstractions.Entity;
 import tools.redstone.abstracraft.math.Vec3d;
 
 public class EntityImpl implements Entity {
@@ -14,11 +12,6 @@ public class EntityImpl implements Entity {
     @Override
     public void kill() {
         mcEntity.kill();
-    }
-
-    @Override
-    public void damage(float amount) {
-        mcEntity.hurt(DamageSource.OUT_OF_WORLD, amount);
     }
 
     @Override
