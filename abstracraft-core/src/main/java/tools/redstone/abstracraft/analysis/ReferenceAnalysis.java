@@ -17,12 +17,12 @@ public class ReferenceAnalysis {
     public final ReferenceInfo ref;                                           // The reference this analysis covers
     public List<ReferenceInfo> requiredDependencies = new ArrayList<>();      // All recorded required dependencies used by this method
     public int optionalReferenceNumber = 0;                                   // Whether this method is referenced in an optionally() block
-    public List<ReferenceAnalysis> allAnalyzedReferences = new ArrayList<>(); // The analysis objects of all methods/fields normally called by this method
+    public Set<ReferenceAnalysis> allAnalyzedReferences = new HashSet<>();    // The analysis objects of all methods/fields normally called by this method
     public boolean complete = false;                                          // Whether this analysis has completed all mandatory tasks
     public boolean partial = false;                                           // Whether this analysis is used purely to store meta or if it is actually analyzed with bytecode analysis
     public final boolean field;
 
-    public List<DependencyAnalysisHook.ReferenceHook> refHooks = new ArrayList<>();
+    public List<ClassAnalysisHook.ReferenceHook> refHooks = new ArrayList<>();
 
     public ReferenceAnalysis(ClassDependencyAnalyzer analyzer, ReferenceInfo ref) {
         this.analyzer = analyzer;
@@ -31,7 +31,7 @@ public class ReferenceAnalysis {
     }
 
     // Checked refHooks.add
-    private void addRefHook(DependencyAnalysisHook hook, Supplier<DependencyAnalysisHook.ReferenceHook> supplier) {
+    private void addRefHook(ClassAnalysisHook hook, Supplier<ClassAnalysisHook.ReferenceHook> supplier) {
         // create new ref hook
         addIfNotNull(refHooks, supplier.get());
     }

@@ -4,6 +4,7 @@ import org.objectweb.asm.*;
 import tools.redstone.abstracraft.analysis.*;
 import tools.redstone.abstracraft.usage.Abstraction;
 import tools.redstone.abstracraft.util.ASMUtil;
+import tools.redstone.abstracraft.util.PackageWalker;
 import tools.redstone.abstracraft.util.ReflectUtil;
 
 import java.io.InputStream;
@@ -12,6 +13,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 /**
  * Manages all systems related to abstracting.
@@ -28,7 +30,7 @@ public class AbstractionManager {
 
     Predicate<String> classAuditPredicate = s -> true;                                                                  // The predicate for abstraction class names.
     Predicate<ReferenceAnalysis> requiredMethodPredicate = m -> m.optionalReferenceNumber <= 0; // The predicate for required methods.
-    final List<DependencyAnalysisHook> analysisHooks = new ArrayList<>();                                               // The global dependency analysis hooks
+    final List<ClassAnalysisHook> analysisHooks = new ArrayList<>();                                               // The global dependency analysis hooks
 
     final Map<Class<?>, Class<?>> implByBaseClass = new HashMap<>();                                                    // The registered implementation classes by base class
     final Map<ReferenceInfo, Boolean> implementedCache = new HashMap<>();                                               // A cache to store whether a specific method is implemented for fast access
@@ -102,7 +104,9 @@ public class AbstractionManager {
                 }
             }
 
-            throw new IllegalArgumentException(startClass + " is not an Abstraction class");
+            // not an abstraction class, be lenient and return
+            // an empty list
+            return List.of();
         }
 
         if (current == null)
@@ -163,6 +167,9 @@ public class AbstractionManager {
      * @return Whether it is implemented.
      */
     public boolean isImplemented(ReferenceInfo method) {
+        if (method.equals(ReferenceInfo.unimplemented()))
+            return false;
+
         Boolean b = implementedCache.get(method);
         if (b != null)
             return b;
@@ -351,10 +358,18 @@ public class AbstractionManager {
         return analyzer.getClassAnalysis();
     }
 
-    public AbstractionManager addAnalysisHook(DependencyAnalysisHook hook) {
+    public AbstractionManager addAnalysisHook(ClassAnalysisHook hook) {
         this.analysisHooks.add(hook);
         this.partialAnalyzer.addHook(hook);
+        hook.onRegister(this);
         return this;
+    }
+
+    public void registerImplsFromResources(Stream<PackageWalker.Resource> stream) {
+        stream.forEach(resource -> {
+            Class<?> klass = ReflectUtil.getClass(resource.publicPath());
+            registerImpl(klass);
+        });
     }
 
     /* ------------ Hooks -------------- */
@@ -381,9 +396,9 @@ public class AbstractionManager {
     }
 
     /** Allows dependencies which call to a class implementing the given interface */
-    public static DependencyAnalysisHook checkDependenciesForInterface(final Class<?> itf, boolean includeFields) {
+    public static ClassAnalysisHook checkDependenciesForInterface(final Class<?> itf, boolean includeFields) {
         final ClassInheritanceChecker checker = ClassInheritanceChecker.forClass(itf);
-        return new DependencyAnalysisHook() {
+        return new ClassAnalysisHook() {
             @Override
             public Boolean isDependencyCandidate(AnalysisContext context, ReferenceInfo ref) {
                 if (!includeFields && ref.isField())
@@ -394,9 +409,9 @@ public class AbstractionManager {
     }
 
     /** Checks the bytecode and declaration class of methods to determine whether they are implemented */
-    public static DependencyAnalysisHook checkForExplicitImplementation(Class<?> unimplementedProvidingItf) {
-        final ClassInheritanceChecker checker = ClassInheritanceChecker.forClass(unimplementedProvidingItf);
-        return new DependencyAnalysisHook() {
+    public static ClassAnalysisHook checkForExplicitImplementation(Class<?> unimplementedOwnerItf) {
+        final ClassInheritanceChecker checker = ClassInheritanceChecker.forClass(unimplementedOwnerItf);
+        return new ClassAnalysisHook() {
             final Map<Class<?>, DefaultImplAnalysis> defaultImplAnalysisCache = new HashMap<>(); // Cache for default implementation analysis per class
 
             // Check the bytecode of the owner of the given method
@@ -456,8 +471,8 @@ public class AbstractionManager {
     }
 
     /** Checks static field dependencies for a not null value to determine if they're implemented */
-    public static DependencyAnalysisHook checkStaticFieldsNotNull() {
-        return new DependencyAnalysisHook() {
+    public static ClassAnalysisHook checkStaticFieldsNotNull() {
+        return new ClassAnalysisHook() {
             @Override
             public Boolean checkImplemented(AbstractionManager manager, ReferenceInfo ref, Class<?> refClass) throws Throwable {
                 if (!ref.isField() || !ref.isStatic()) // nothing to say

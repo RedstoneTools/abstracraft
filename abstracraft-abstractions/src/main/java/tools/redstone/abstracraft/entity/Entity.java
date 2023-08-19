@@ -1,10 +1,24 @@
 package tools.redstone.abstracraft.entity;
 
 import tools.redstone.abstracraft.usage.Abstraction;
-import tools.redstone.abstracraft.math.Vec3d;
 
+import java.util.UUID;
+
+/**
+ * Represents any type of entity in the world.
+ */
 public interface Entity extends Abstraction {
-    default void kill() { unimplemented(); }
-    default void damage(float amount) { unimplemented(); }
-    default Vec3d getPosition() { return unimplemented(); }
+
+    /**
+     * Get the unique ID for this entity.
+     *
+     * @return The UUID for this entity.
+     */
+    default UUID getUniqueID() { return unimplemented(); }
+
+    /**
+     * Discard this entity from the world immediately.
+     */
+    default void discard() { unimplemented(); }
+
 }

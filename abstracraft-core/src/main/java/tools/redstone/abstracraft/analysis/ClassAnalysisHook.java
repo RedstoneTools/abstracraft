@@ -5,7 +5,7 @@ import tools.redstone.abstracraft.AbstractionManager;
 /**
  * Used to extend functionality of the dependency analyzer.
  */
-public interface DependencyAnalysisHook {
+public interface ClassAnalysisHook {
 
     interface ReferenceHook {
         // When the optional block this method was
@@ -21,6 +21,9 @@ public interface DependencyAnalysisHook {
         // Called in post-analysis
         default void postAnalyze() { }
     }
+
+    // When this hook is registered to the given manager
+    default void onRegister(AbstractionManager manager) { }
 
     // When a method is referenced in a required block
     default ReferenceHook requiredReference(AnalysisContext context, ReferenceAnalysis called) { return null; }

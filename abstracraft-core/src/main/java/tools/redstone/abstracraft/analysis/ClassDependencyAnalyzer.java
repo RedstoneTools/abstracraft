@@ -63,11 +63,11 @@ public class ClassDependencyAnalyzer {
     private String className;                                             // The public name of this class
     private ClassReader classReader;                                      // The class reader for the bytecode
     private ClassNode classNode;                                          // The class node to be written
-    public final List<DependencyAnalysisHook> hooks = new ArrayList<>();  // The analysis hooks
+    public final List<ClassAnalysisHook> hooks = new ArrayList<>();  // The analysis hooks
 
     private ClassAnalysis classAnalysis = new ClassAnalysis(); // The result of analysis
 
-    public ClassDependencyAnalyzer addHook(DependencyAnalysisHook hook) {
+    public ClassDependencyAnalyzer addHook(ClassAnalysisHook hook) {
         this.hooks.add(hook);
         return this;
     }
@@ -165,7 +165,7 @@ public class ClassDependencyAnalyzer {
      * @param currentMethodInfo The method descriptor.
      * @return The visitor.
      */
-    public MethodVisitor methodVisitor(AnalysisContext context, ReferenceInfo currentMethodInfo, ReferenceAnalysis methodAnalysis, MethodNode oldMethod) {
+    public MethodVisitor methodVisitor(AnalysisContext context, ReferenceInfo currentMethodInfo, ReferenceAnalysis currentMethodAnalysis, MethodNode oldMethod) {
         String name = currentMethodInfo.name();
         String descriptor = currentMethodInfo.desc();
 
@@ -174,8 +174,8 @@ public class ClassDependencyAnalyzer {
             throw new IllegalArgumentException("No local method by " + currentMethodInfo + " in class " + internalName);
         }
 
-        abstractionManager.registerAnalysis(methodAnalysis);
-        classAnalysis.analyzedMethods.put(currentMethodInfo, methodAnalysis);
+        abstractionManager.registerAnalysis(currentMethodAnalysis);
+        classAnalysis.analyzedMethods.put(currentMethodInfo, currentMethodAnalysis);
 
 //        classNode.accept(new TraceClassVisitor(new PrintWriter(System.out)));
 
@@ -338,6 +338,7 @@ public class ClassDependencyAnalyzer {
 
                         // if one is implemented, add as required dependencies
                         chosen = lambda;
+                        currentMethodAnalysis.registerReference(lambda.methodInfo); // register lambda as referenced by the current method
                         analysis.referenceRequired(context);
                         if (dependencies != null) {
                             CollectionUtil.mapImmediate(dependencies, dep -> new MethodDependency(false, dep, false), classAnalysis.dependencies, chosenDependencies);
@@ -358,6 +359,9 @@ public class ClassDependencyAnalyzer {
                                 "onePresent", "([Ljava/util/function/Supplier;I)Ljava/lang/Object;",
                                 false);
                     } else {
+                        // add unimplemented dependency
+                        currentMethodAnalysis.registerReference(ReferenceInfo.unimplemented());
+
                         super.visitMethodInsn(Opcodes.INVOKESTATIC, NAME_InternalSubstituteMethods,
                                 "nonePresent", "([Ljava/util/function/Supplier;)Ljava/lang/Object;",
                                 false);
@@ -369,8 +373,8 @@ public class ClassDependencyAnalyzer {
                 // analyze public method
                 var analysis = publicReference(context, calledMethodInfo);
                 if (analysis != null) {
-                    methodAnalysis.requiredDependencies.addAll(analysis.requiredDependencies);
-                    methodAnalysis.allAnalyzedReferences.add(analysis);
+                    currentMethodAnalysis.requiredDependencies.addAll(analysis.requiredDependencies);
+                    currentMethodAnalysis.allAnalyzedReferences.add(analysis);
                 }
 
                 /* Check for direct usage of dependencies */
@@ -379,13 +383,13 @@ public class ClassDependencyAnalyzer {
 
                     // dont transform required if the method its called in
                     // is a block used by Usage.optionally
-                    if (methodAnalysis.optionalReferenceNumber <= 0) {
+                    if (currentMethodAnalysis.optionalReferenceNumber <= 0) {
                         // insert runtime throw
                         if (!abstractionManager.isImplemented(calledMethodInfo)) {
                             addInsn(new InsnNode(-1) {
                                 @Override
                                 public void accept(MethodVisitor mv) {
-                                    if (methodAnalysis.optionalReferenceNumber < 0) {
+                                    if (currentMethodAnalysis.optionalReferenceNumber < 0) {
                                         mv.visitTypeInsn(Opcodes.NEW, NAME_NotImplementedException);
                                         mv.visitInsn(Opcodes.DUP);
                                         makeMethodInfo(mv, calledMethodInfo.ownerInternalName(), calledMethodInfo.name(), calledMethodInfo.desc(), calledMethodInfo.isStatic());
@@ -397,7 +401,7 @@ public class ClassDependencyAnalyzer {
                         }
                     }
 
-                    methodAnalysis.requiredDependencies.add(calledMethodInfo);
+                    currentMethodAnalysis.requiredDependencies.add(calledMethodInfo);
                 }
 
                 super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
@@ -449,13 +453,13 @@ public class ClassDependencyAnalyzer {
 
                         // dont transform required if the method its called in
                         // is a block used by Usage.optionally
-                        if (methodAnalysis.optionalReferenceNumber <= 0) {
+                        if (currentMethodAnalysis.optionalReferenceNumber <= 0) {
                             // insert runtime throw
                             if (!abstractionManager.isImplemented(fieldInfo)) {
                                 addInsn(new InsnNode(-1) {
                                     @Override
                                     public void accept(MethodVisitor mv) {
-                                        if (methodAnalysis.optionalReferenceNumber < 0) {
+                                        if (currentMethodAnalysis.optionalReferenceNumber < 0) {
                                             mv.visitTypeInsn(Opcodes.NEW, NAME_NotImplementedException);
                                             mv.visitInsn(Opcodes.DUP);
                                             makeFieldInfo(mv, fieldInfo.ownerInternalName(), fieldInfo.name(), fieldInfo.desc(), fieldInfo.isStatic());
@@ -467,7 +471,7 @@ public class ClassDependencyAnalyzer {
                             }
                         }
 
-                        methodAnalysis.requiredDependencies.add(fieldInfo);
+                        currentMethodAnalysis.requiredDependencies.add(fieldInfo);
                     }
 
                     super.visitFieldInsn(opcode, owner, name, descriptor);
@@ -515,7 +519,7 @@ public class ClassDependencyAnalyzer {
             public void visitEnd() {
                 for (var hook : hooks) hook.leaveMethod(context);
                 context.leaveMethod();
-                methodAnalysis.complete = true;
+                currentMethodAnalysis.complete = true;
             }
         };
 

@@ -4,7 +4,7 @@ import org.junit.jupiter.api.function.Executable;
 import org.opentest4j.AssertionFailedError;
 import tools.redstone.abstracraft.AbstractionManager;
 import tools.redstone.abstracraft.analysis.Dependency;
-import tools.redstone.abstracraft.analysis.DependencyAnalysisHook;
+import tools.redstone.abstracraft.analysis.ClassAnalysisHook;
 import tools.redstone.abstracraft.analysis.MethodDependency;
 import tools.redstone.abstracraft.analysis.RequireOneDependency;
 import tools.redstone.abstracraft.usage.Abstraction;
@@ -33,10 +33,6 @@ public class TestSystem {
         String abstractionImpl();
         String[] hooks() default {};
         boolean fieldDependencies() default true;
-    }
-
-    public static void main(String[] args) {
-
     }
 
     // System.out.println
@@ -89,12 +85,12 @@ public class TestSystem {
                 for (String partialHookClassName : testAnnotation.hooks()) {
                     String hookClassName = klass.getName() + "$" + partialHookClassName;
                     Class<?> hookClass = ReflectUtil.getClass(hookClassName);
-                    if (hookClass == null || !DependencyAnalysisHook.class.isAssignableFrom(hookClass))
+                    if (hookClass == null || !ClassAnalysisHook.class.isAssignableFrom(hookClass))
                         throw new IllegalArgumentException("Couldn't find hook class by name " + abstractionImplName);
                     if (debug)
                         System.out.println("DEBUG Test " + testName + ": Found hook " + hookClass);
                     Object hook = hookClass.getConstructor().newInstance();
-                    abstractionManager.addAnalysisHook((DependencyAnalysisHook) hook);
+                    abstractionManager.addAnalysisHook((ClassAnalysisHook) hook);
                     hooks.add(hook);
                 }
 

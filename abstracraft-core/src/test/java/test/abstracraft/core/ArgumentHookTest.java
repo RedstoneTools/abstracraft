@@ -1,6 +1,5 @@
 package test.abstracraft.core;
 
-import org.objectweb.asm.Type;
 import tools.redstone.abstracraft.AbstractionManager;
 import tools.redstone.abstracraft.analysis.*;
 import tools.redstone.abstracraft.usage.Abstraction;
@@ -51,9 +50,7 @@ public class ArgumentHookTest {
         }
     }
 
-    public static class MyHook implements DependencyAnalysisHook {
-        static final String NAME_CommandContext = Type.getType(CommandContext.class).getInternalName();
-
+    public static class ArgumentUsageHook implements ClassAnalysisHook {
         // Registers whether fields should be registered or not
         final Set<ReferenceInfo> excludeFields = new HashSet<>();
 
@@ -89,7 +86,8 @@ public class ArgumentHookTest {
 
                 @Override
                 public void optionalBlockDiscarded(AnalysisContext context) {
-                    referenceCounter -= 2;
+                    referenceCounter -= 2; // usages in optionally() blocks call both
+                                           // referenceRequired() and referenceOptional()
                 }
 
                 @Override
@@ -141,7 +139,7 @@ public class ArgumentHookTest {
     }
 
     @TestSystem.Test(testClass = "TestClass", abstractionImpl = "CommandContextImpl", hooks = {"MyHook"})
-    void test_ArgHook(MyHook hook, Tests tests, CommandContext ctx, AbstractionManager abstractionManager) {
+    void test_ArgHook(ArgumentUsageHook hook, Tests tests, CommandContext ctx, AbstractionManager abstractionManager) {
         System.out.println("Exclude Argument fields: " + hook.excludeFields);
     }
 

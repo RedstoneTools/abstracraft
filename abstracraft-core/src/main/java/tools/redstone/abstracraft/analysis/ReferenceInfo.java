@@ -53,6 +53,18 @@ public class ReferenceInfo {
         return isStatic;
     }
 
+    private static final ReferenceInfo UNIMPLEMENTED = new ReferenceInfo(null, null, "<unimplemented>", null, null, false);
+
+    /**
+     * Returns the reference info object which is always determined
+     * to be unimplemented by the {@link tools.redstone.abstracraft.AbstractionManager}.
+     *
+     * @return The unimplemented reference.
+     */
+    public static ReferenceInfo unimplemented() {
+        return UNIMPLEMENTED;
+    }
+
     public static ReferenceInfo forMethod(Method method) {
         String desc = Type.getMethodDescriptor(method);
         return new ReferenceInfo(method.getDeclaringClass().getName().replace('.', '/'),
@@ -102,9 +114,9 @@ public class ReferenceInfo {
             return hashCode;
 
         int hc = 1;
-        hc = 31 * hc + ownerInternalName.hashCode();
-        hc = 31 * hc + name.hashCode();
-        hc = 31 * hc + desc.hashCode();
+        hc = 31 * hc + Objects.hashCode(ownerInternalName);
+        hc = 31 * hc + Objects.hashCode(name);
+        hc = 31 * hc + Objects.hashCode(desc);
         hc = 31 * hc + (isStatic ? 1 : 0);
         return this.hashCode = hc;
     }
