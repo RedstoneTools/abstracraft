@@ -8,7 +8,6 @@ import java.util.UUID;
  * Represents any type of entity in the world.
  */
 public interface Entity extends Abstraction {
-
     /**
      * Get the unique ID for this entity.
      *
@@ -20,5 +19,4 @@ public interface Entity extends Abstraction {
      * Discard this entity from the world immediately.
      */
     default void discard() { unimplemented(); }
-
 }
