@@ -1,4 +1,4 @@
-package tools.redstone.abstracraft.impl;
+package tools.redstone.abstracraft.impl.entity;
 
 import net.minecraft.world.entity.LivingEntity;
 
