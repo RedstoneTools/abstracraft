@@ -1,7 +1,7 @@
 package tools.redstone.abstracraft.impl.entity;
 
 import net.minecraft.world.entity.Entity;
-import tools.redstone.abstracraft.core.HandleAbstraction;
+import tools.redstone.abstracraft.HandleAbstraction;
 
 import java.util.UUID;
 

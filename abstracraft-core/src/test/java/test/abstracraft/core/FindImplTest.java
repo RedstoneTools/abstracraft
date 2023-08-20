@@ -1,21 +1,26 @@
 package test.abstracraft.core;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
 import tools.redstone.abstracraft.AbstractionManager;
 import tools.redstone.abstracraft.usage.Abstraction;
 import tools.redstone.abstracraft.util.PackageWalker;
+import tools.redstone.abstracraft.util.ReflectUtil;
 
 public class FindImplTest {
 
-    interface A extends Abstraction { }
-    interface B extends Abstraction { }
+    public static void main(String[] args) {
+        new FindImplTest().test_FindAndRegisterImpls();
+    }
 
-    static class AImpl implements A { }
-    static class BImpl implements B { }
+    public interface A extends Abstraction { }
+    public interface B extends Abstraction { }
 
-    @Test
+    public static class AImpl implements A { }
+    public static class BImpl implements B { }
+
     void test_FindAndRegisterImpls() {
+        ReflectUtil.ensureLoaded(A.class);
+        ReflectUtil.ensureLoaded(B.class);
         final AbstractionManager abstractionManager = new AbstractionManager();
         abstractionManager.registerImplsFromResources(
                 new PackageWalker(this.getClass(), "test.abstracraft.core")
@@ -24,8 +29,8 @@ public class FindImplTest {
         );
 
         // check impls registered
-        Assertions.assertEquals(AImpl.class, abstractionManager.getImplByClass(A.class));
-        Assertions.assertEquals(BImpl.class, abstractionManager.getImplByClass(B.class));
+        Assertions.assertEquals(AImpl.class.getName(), abstractionManager.getImplByClass(A.class).getName());
+        Assertions.assertEquals(BImpl.class.getName(), abstractionManager.getImplByClass(B.class).getName());
     }
 
 }

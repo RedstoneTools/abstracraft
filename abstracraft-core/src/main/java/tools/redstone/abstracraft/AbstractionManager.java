@@ -50,7 +50,7 @@ public class AbstractionManager {
                 getClass().getClassLoader(),
                 // transformer
                 ((name, reader, writer) -> {
-                    System.out.println("LOADER DEBUG loading class " + name);
+                    System.out.println("LOADER DEBUG loading class(" + name + ")");
                     long t1 = System.currentTimeMillis();
 
                     var analyzer = analyzer(name, true);
@@ -59,8 +59,8 @@ public class AbstractionManager {
                     analyzer.getClassNode().accept(writer);
 
                     long t2 = System.currentTimeMillis();
-                    System.out.println("LOADER DEBUG transforming class took " + (t2 - t1) + "ms");
-                }), ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, true);
+//                    System.out.println("LOADER DEBUG transforming class took " + (t2 - t1) + "ms");
+                }), ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, false);
 
         this.partialAnalyzer = new ClassDependencyAnalyzer(this, null);
     }
@@ -367,7 +367,7 @@ public class AbstractionManager {
 
     public void registerImplsFromResources(Stream<PackageWalker.Resource> stream) {
         stream.forEach(resource -> {
-            Class<?> klass = ReflectUtil.getClass(resource.publicPath());
+            Class<?> klass = findClass(resource.publicPath());
             registerImpl(klass);
         });
     }
@@ -381,13 +381,13 @@ public class AbstractionManager {
             return checkerCache.computeIfAbsent(itf, __ -> new ClassInheritanceChecker(itf, new HashMap<>()));
         }
 
-        public boolean from(String name) {
+        public boolean from(AbstractionManager mgr, String name) {
             Boolean b = cache.get(name);
             if (b != null)
                 return b;
 
             try {
-                cache.put(name, b = itf.isAssignableFrom(ReflectUtil.getClass(name)));
+                cache.put(name, b = itf.isAssignableFrom(mgr.findClass(name)));
                 return b;
             } catch (Exception e) {
                 return false;
@@ -403,7 +403,7 @@ public class AbstractionManager {
             public Boolean isDependencyCandidate(AnalysisContext context, ReferenceInfo ref) {
                 if (!includeFields && ref.isField())
                     return null;
-                return checker.from(ref.ownerClassName()) ? true : null;
+                return checker.from(context.abstractionManager(), ref.ownerClassName()) ? true : null;
             }
         };
     }
@@ -416,7 +416,7 @@ public class AbstractionManager {
 
             // Check the bytecode of the owner of the given method
             // to see whether
-            private boolean checkBytecodeImplemented(Method method) {
+            private boolean checkBytecodeImplemented(AbstractionManager manager, Method method) {
                 ReferenceInfo methodInfo = ReferenceInfo.forMethod(method);
                 Class<?> klass = method.getDeclaringClass();
 
@@ -435,7 +435,7 @@ public class AbstractionManager {
                             @Override
                             public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
                                 // check for Abstraction#unimplemented call
-                                if (checker.from(owner.replace('/', '.')) && "unimplemented".equals(name) && descriptor.startsWith("()")) {
+                                if (checker.from(manager, owner.replace('/', '.')) && "unimplemented".equals(name) && descriptor.startsWith("()")) {
                                     unimplementedMethods.add(currentMethod);
                                 }
                             }
@@ -462,7 +462,7 @@ public class AbstractionManager {
                 Method m = implClass.getMethod(ref.name(), ASMUtil.asClasses(ref.type().getArgumentTypes()));
 
                 if (m.getDeclaringClass() == refClass)
-                    return checkBytecodeImplemented(m);
+                    return checkBytecodeImplemented(manager, m);
                 if (m.getDeclaringClass().isInterface() && !m.isDefault())
                     return false;
                 return !Modifier.isAbstract(m.getModifiers());

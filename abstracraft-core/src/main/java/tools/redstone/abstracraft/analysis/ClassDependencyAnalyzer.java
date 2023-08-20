@@ -1,18 +1,24 @@
 package tools.redstone.abstracraft.analysis;
 
 import org.objectweb.asm.*;
+import org.objectweb.asm.signature.SignatureVisitor;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.util.Printer;
+import org.objectweb.asm.util.TraceClassVisitor;
 import tools.redstone.abstracraft.AbstractionManager;
 import tools.redstone.abstracraft.usage.NotImplementedException;
 import tools.redstone.abstracraft.usage.Usage;
 import tools.redstone.abstracraft.util.ASMUtil;
 import tools.redstone.abstracraft.util.CollectionUtil;
 import tools.redstone.abstracraft.util.Container;
+import tools.redstone.abstracraft.util.MethodWriter;
 import tools.redstone.abstracraft.util.ReflectUtil;
 
+import java.io.PrintWriter;
 import java.lang.reflect.Modifier;
+import java.sql.Ref;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -28,6 +34,7 @@ public class ClassDependencyAnalyzer {
     // The result of the dependency analysis on a class
     public static class ClassAnalysis {
         public boolean completed = false;                                                     // Whether this analysis is complete
+        public boolean running = false;
         public final Map<ReferenceInfo, ReferenceAnalysis> analyzedMethods = new HashMap<>(); // All analysis objects for the methods in this class
         public List<Dependency> dependencies = new ArrayList<>();                             // All dependencies recorded in this class
 
@@ -41,10 +48,11 @@ public class ClassDependencyAnalyzer {
     }
 
     /* Stack Tracking */
-    public record FieldValue(ReferenceInfo fieldInfo, boolean isStatic) { }
-    public record InstanceOf(Type type) { }
-    public record ReturnValue(ReferenceInfo method, Type type) { public static ReturnValue of(ReferenceInfo info) { return new ReturnValue(info, info.type().getReturnType()); } }
-    public record FromVar(int varIndex, Type type) { }
+    public interface StackValue { Type type(); default String signature() { return null; } }
+    public record FieldValue(ReferenceInfo fieldInfo, boolean isStatic) implements StackValue { @Override public Type type() { return fieldInfo.type(); }@Override public String signature() { return fieldInfo.signature(); }}
+    public record InstanceOf(Type type) implements StackValue { }
+    public record ReturnValue(ReferenceInfo method, Type type, String signature) implements StackValue { public static ReturnValue of(ReferenceInfo info) { return new ReturnValue(info, info.type().getReturnType(), info.signature()); } }
+    public record FromVar(int varIndex, Type type, String signature) implements StackValue { }
 
     /* Compute Stack Tracking */
     public record Lambda(boolean direct, ReferenceInfo methodInfo, Container<Boolean> discard) { }
@@ -133,6 +141,7 @@ public class ClassDependencyAnalyzer {
             analysis = new ReferenceAnalysis(this, info);
             MethodVisitor v = methodVisitor(context, info, analysis, m);
             m.accept(v); // the visitor registers the result automatically
+            v.visitEnd();
             return analysis;
         } catch (Exception e) {
             throw new RuntimeException("Error while analyzing local method " + info, e);
@@ -179,10 +188,21 @@ public class ClassDependencyAnalyzer {
 
 //        classNode.accept(new TraceClassVisitor(new PrintWriter(System.out)));
 
-        // create method visitor
+        // create new method
+        boolean isThisMethodStatic = Modifier.isStatic(oldMethod.access);
         MethodNode newMethod = new MethodNode(oldMethod.access, name, descriptor, oldMethod.signature, oldMethod.exceptions.toArray(new String[0]));
+
+        // create visitor hooks
+        var mWriter = new MethodWriter(newMethod, newMethod);
+        final List<ClassAnalysisHook.MethodVisitorHook> methodVisitorHooks = new ArrayList<>();
+        for (var hook : hooks)
+            CollectionUtil.addIfNotNull(methodVisitorHooks, hook.visitMethod(context, mWriter));
+
+        // create method visitor
         var visitor = new MethodVisitor(ASMUtil.ASM_V, newMethod) {
-            // The compute stack of lambda's
+            boolean endVisited = false;
+
+            // Tries to estimate/track the current compute stack
             Stack<Object> computeStack = new Stack<>();
 
             {
@@ -194,6 +214,11 @@ public class ClassDependencyAnalyzer {
 
             public void addInsn(InsnNode node) {
                 newMethod.instructions.add(node);
+            }
+
+            @Override
+            public void visitCode() {
+                context.printAnalysisTrace(System.out);
             }
 
             @Override
@@ -242,7 +267,17 @@ public class ClassDependencyAnalyzer {
 
             @Override
             public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
-                final ReferenceInfo calledMethodInfo = new ReferenceInfo(owner, owner.replace('/', '.'), name, descriptor, Type.getMethodType(descriptor), opcode == Opcodes.INVOKESTATIC);
+                final ReferenceInfo calledMethodInfo = ReferenceInfo.forMethodInfo(owner, name, descriptor, /* todo: find generic sig */ descriptor, opcode == Opcodes.INVOKESTATIC);
+                if (calledMethodInfo.equals("getB"))
+                    System.out.println("getB CALLED");
+
+                /* Check for hook intercepts */
+                for (var vh : methodVisitorHooks) {
+                    if (vh.visitMethodInsn(context, opcode, calledMethodInfo)) {
+                        return;
+                    }
+                }
+
                 /* Check for usage of dependencies through proxy methods */
 
                 // check for Usage.optionally(Supplier<T>)
@@ -419,6 +454,14 @@ public class ClassDependencyAnalyzer {
 
             @Override
             public void visitTypeInsn(int opcode, String type) {
+                Type type1 = Type.getObjectType(type);
+                /* Check for hook intercepts */
+                for (var vh : methodVisitorHooks) {
+                    if (vh.visitTypeInsn(context, opcode, type1)) {
+                        return;
+                    }
+                }
+
                 super.visitTypeInsn(opcode, type);
                 if (opcode == Opcodes.ANEWARRAY) {
                     int size = (int) computeStack.pop();
@@ -428,13 +471,26 @@ public class ClassDependencyAnalyzer {
                 if (opcode == Opcodes.NEW) {
                     computeStack.push(new InstanceOf(Type.getObjectType(type)));
                 }
+
+                if (opcode == Opcodes.CHECKCAST) {
+                    computeStack.pop();
+                    computeStack.push(new InstanceOf(Type.getObjectType(type)));
+                }
             }
 
             @Override
             public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
-                if (opcode == Opcodes.GETFIELD || opcode == Opcodes.GETSTATIC) {
-                    var fieldInfo = ReferenceInfo.forFieldInfo(owner, name, descriptor, opcode == Opcodes.GETSTATIC);
+                /* Check for hook intercepts */
+                var fieldNode = owner.equals(internalName) ? ASMUtil.findField(classNode, name) : null;
+                var fieldInfo = ReferenceInfo.forFieldInfo(owner, name, descriptor,
+                        fieldNode != null ? fieldNode.signature : null, opcode == Opcodes.GETSTATIC);
+                for (var vh : methodVisitorHooks) {
+                    if (vh.visitFieldInsn(context, opcode, fieldInfo)) {
+                        return;
+                    }
+                }
 
+                if (opcode == Opcodes.GETFIELD || opcode == Opcodes.GETSTATIC) {
                     // pop instance if necessary
                     if (opcode == Opcodes.GETFIELD) {
                         computeStack.pop();
@@ -483,10 +539,23 @@ public class ClassDependencyAnalyzer {
 
             @Override
             public void visitVarInsn(int opcode, int varIndex) {
-                super.visitVarInsn(opcode, varIndex);
+                if (!isThisMethodStatic && varIndex == 0) {
+                    super.visitVarInsn(opcode, varIndex);
+                    computeStack.push(new InstanceOf(Type.getObjectType(currentMethodInfo.ownerInternalName())));
+                    return;
+                }
+
                 Type t = Type.getType(oldMethod.localVariables.get(varIndex).desc);
+                String sig = oldMethod.localVariables.get(varIndex).signature;
+                for (var vh : methodVisitorHooks) {
+                    if (vh.visitVarInsn(context, opcode, varIndex, t, sig)) {
+                        return;
+                    }
+                }
+
+                super.visitVarInsn(opcode, varIndex);
                 switch (opcode) {
-                    case Opcodes.ALOAD, Opcodes.ILOAD, Opcodes.DLOAD, Opcodes.FLOAD -> computeStack.push(new FromVar(varIndex, t));
+                    case Opcodes.ALOAD, Opcodes.ILOAD, Opcodes.DLOAD, Opcodes.FLOAD -> computeStack.push(new FromVar(varIndex, t, sig));
                     case Opcodes.ASTORE, Opcodes.ISTORE, Opcodes.DSTORE, Opcodes.FSTORE -> computeStack.pop();
                 }
             }
@@ -494,6 +563,12 @@ public class ClassDependencyAnalyzer {
             @Override public void visitLdcInsn(Object value) { super.visitLdcInsn(value); computeStack.push(value); }
             @Override public void visitIntInsn(int opcode, int operand) { super.visitIntInsn(opcode, operand); computeStack.push(operand); }
             @Override public void visitInsn(int opcode) {
+                for (var vh : methodVisitorHooks) {
+                    if (vh.visitInsn(context, opcode)) {
+                        return;
+                    }
+                }
+
                 super.visitInsn(opcode);
                 switch (opcode) {
                     case Opcodes.DUP -> computeStack.push(computeStack.peek());
@@ -517,6 +592,10 @@ public class ClassDependencyAnalyzer {
 
             @Override
             public void visitEnd() {
+                if (endVisited) return;
+                endVisited = true;
+                System.out.println("    visitEnd()");
+
                 for (var hook : hooks) hook.leaveMethod(context);
                 context.leaveMethod();
                 currentMethodAnalysis.complete = true;
@@ -534,7 +613,12 @@ public class ClassDependencyAnalyzer {
      * @return This.
      */
     public ClassDependencyAnalyzer analyzeAndTransform() {
+        if (classAnalysis.running)
+            return this;
+        classNode.accept(new TraceClassVisitor(new PrintWriter(System.out)));
+
         /* find dependencies */
+        classAnalysis.running = true;
         classNode.accept(new ClassVisitor(ASMUtil.ASM_V) {
             @Override
             public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {

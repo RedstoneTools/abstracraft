@@ -1,8 +1,11 @@
 package tools.redstone.abstracraft;
 
+import tools.redstone.abstracraft.adapter.Adapter;
+import tools.redstone.abstracraft.adapter.AdapterAnalysisHook;
 import tools.redstone.abstracraft.analysis.ClassAnalysisHook;
 import tools.redstone.abstracraft.usage.Abstraction;
 import tools.redstone.abstracraft.util.PackageWalker;
+import tools.redstone.abstracraft.adapter.AdapterRegistry;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +40,8 @@ public class Abstracraft {
     private final AbstractionManager manager = new AbstractionManager()
             .addAnalysisHook(AbstractionManager.checkDependenciesForInterface(Abstraction.class, true))
             .addAnalysisHook(AbstractionManager.checkStaticFieldsNotNull())
-            .addAnalysisHook(AbstractionManager.checkForExplicitImplementation(Abstraction.class));
+            .addAnalysisHook(AbstractionManager.checkForExplicitImplementation(Abstraction.class))
+            .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, getAdapterRegistry()));
 
     // The packages to find implementation classes to
     // register from
@@ -53,6 +57,19 @@ public class Abstracraft {
 
     // The package under which all impls are located
     public static final String ABSTRACRAFT_IMPLEMENTATION_PACKAGE = "tools.redstone.abstracraft.impl";
+
+    /**
+     * Get the adapter registry used
+     *
+     * @return The adapter registry.
+     */
+    public AdapterRegistry getAdapterRegistry() {
+        return AdapterRegistry.getInstance();
+    }
+
+    public void registerAdapter(Adapter<?, ?> adapter) {
+        getAdapterRegistry().register(adapter);
+    }
 
     /**
      * Adds the given analysis hook to the manager.
@@ -91,6 +108,11 @@ public class Abstracraft {
      */
     public Class<?> getOrTransformClass(String name) {
         return manager.findClass(name);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <A> Class<? extends A> getImplementationClass(Class<A> abstraction) {
+        return (Class<? extends A>) manager.getImplByClass(abstraction);
     }
 
 }

@@ -1,4 +1,4 @@
-package tools.redstone.abstracraft.core;
+package tools.redstone.abstracraft;
 
 import tools.redstone.abstracraft.usage.Abstraction;
 

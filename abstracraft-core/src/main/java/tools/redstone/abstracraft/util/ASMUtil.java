@@ -3,6 +3,7 @@ package tools.redstone.abstracraft.util;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 import tools.redstone.abstracraft.analysis.ReferenceInfo;
 
@@ -29,6 +30,16 @@ public class ASMUtil {
 
     public static MethodNode findMethod(ClassNode node, ReferenceInfo info) {
         return findMethod(node, info.name(), info.desc());
+    }
+
+    public static FieldNode findField(ClassNode node, String name) {
+        for (FieldNode f : node.fields) {
+            if (name.equals(f.name)) {
+                return f;
+            }
+        }
+
+        return null;
     }
 
     /** java.lang.Class[] -> asm.Type[] */

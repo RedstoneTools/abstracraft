@@ -2,6 +2,8 @@ package tools.redstone.abstracraft.analysis;
 
 import tools.redstone.abstracraft.AbstractionManager;
 
+import java.io.PrintStream;
+import java.io.PrintWriter;
 import java.util.Stack;
 
 public class AnalysisContext {
@@ -32,6 +34,13 @@ public class AnalysisContext {
     // Updates the context when entering a method, assumes shits already on the stacks.
     void enteredMethod() {
 
+    }
+
+    void printAnalysisTrace(PrintStream stream) {
+        for (int i = analysisStack.size() - 1; i >= 0; i--) {
+            var ref = analysisStack.get(i);
+            stream.println(" " + (i == analysisStack.size() - 1 ? "-> " : " - ") + ref);
+        }
     }
 
     public AbstractionManager abstractionManager() {

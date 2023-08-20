@@ -2,7 +2,10 @@ package test.abstracraft.core;
 
 import org.junit.jupiter.api.function.Executable;
 import org.opentest4j.AssertionFailedError;
+import tools.redstone.abstracraft.Abstracraft;
 import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.adapter.AdapterAnalysisHook;
+import tools.redstone.abstracraft.adapter.AdapterRegistry;
 import tools.redstone.abstracraft.analysis.Dependency;
 import tools.redstone.abstracraft.analysis.ClassAnalysisHook;
 import tools.redstone.abstracraft.analysis.MethodDependency;
@@ -25,24 +28,88 @@ import java.util.*;
  */
 public class TestSystem {
 
+    static final Field FIELD_Abstracraft_abstractionManager;
+
+    static {
+        try {
+            FIELD_Abstracraft_abstractionManager = Abstracraft.class.getDeclaredField("manager");
+            FIELD_Abstracraft_abstractionManager.setAccessible(true);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    public static AbstractionManager getGlobalAbstractionManager() {
+        try {
+            return (AbstractionManager) FIELD_Abstracraft_abstractionManager.get(Abstracraft.getInstance());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // Test interface
+    public record TestInterface(Class<?> rootClass, String testMethod, AbstractionManager abstractionManager) {
+        @SuppressWarnings("unchecked")
+        public <T> T runTransformed(String cName, String mName, Object... args) {
+            try {
+                // find full class name
+                if (cName == null || cName.isEmpty())
+                    cName = "." + testMethod;
+                cName = cName.startsWith(".") ?
+                        rootClass.getName() + cName.replace('.', '$') :
+                        cName;
+
+                // load class
+                Class<?> klass = abstractionManager.findClass(cName);
+
+                // find and execute method
+                Method m = null;
+                for (Method m2 : klass.getDeclaredMethods()) {
+                    if (!m2.getName().equals(mName)) continue;
+                    m = m2;
+                    break;
+                }
+
+                if (m == null)
+                    throw new NoSuchMethodException("No method for " + klass + " by name " + mName);
+
+                boolean isStatic = Modifier.isStatic(m.getModifiers());
+
+                Object instance;
+                if (isStatic) instance = null;
+                else {
+                    var constructor = klass.getDeclaredConstructor();
+                    constructor.setAccessible(true);
+                    instance = constructor.newInstance();
+                }
+
+                m.setAccessible(true);
+                return (T) m.invoke(instance, args);
+            } catch (Throwable t) {
+                throw new RuntimeException("Error while executing " + cName + "#" + mName, t);
+            }
+        }
+    }
+
     // Signifies a test
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.METHOD)
     public @interface Test {
-        String testClass();
-        String abstractionImpl();
+        boolean globalAbstractionManager() default false;
+        String testClass() default "";
+        String abstractionImpl() default "";
         String[] hooks() default {};
         boolean fieldDependencies() default true;
     }
 
     // System.out.println
-    static <T> T println(T o) {
+    public static <T> T println(T o) {
         System.out.println(o);
         return o;
     }
 
     // Run code with exceptions caught
-    static void runSafe(Executable executable) {
+    public static void runSafe(Executable executable) {
         try {
             executable.execute();
         } catch (Throwable t) {
@@ -53,11 +120,6 @@ public class TestSystem {
     // Run all tests in the given class
     public static void runTests(Class<?> klass, boolean debug) {
         try {
-            // create abstraction manager
-            final AbstractionManager abstractionManager = new AbstractionManager()
-                    .setClassAuditPredicate(name -> name.startsWith(klass.getName()))
-                    .setRequiredMethodPredicate(method -> method.ref.name().startsWith("test"));
-
             Object instance = klass.newInstance();
             for (Method method : klass.getDeclaredMethods()) {
                 if (Modifier.isStatic(method.getModifiers())) continue;
@@ -65,20 +127,26 @@ public class TestSystem {
                 if (testAnnotation == null) continue;
                 method.setAccessible(true);
 
+                final AbstractionManager abstractionManager = testAnnotation.globalAbstractionManager() ?
+                        // use global abstraction manager
+                        getGlobalAbstractionManager() :
+                        // create new abstraction manager
+                        new AbstractionManager()
+                        .setClassAuditPredicate(name -> name.startsWith(klass.getName()))
+                        .setRequiredMethodPredicate(m -> m.ref.name().startsWith("test"))
+                        .addAnalysisHook(AbstractionManager.checkDependenciesForInterface(Abstraction.class, testAnnotation.fieldDependencies()))
+                        .addAnalysisHook(AbstractionManager.checkForExplicitImplementation(Abstraction.class))
+                        .addAnalysisHook(AbstractionManager.checkStaticFieldsNotNull())
+                        .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, AdapterRegistry.getInstance()));
+
                 // get test name
                 final String testName = method.getName();
 
                 // get test class and shit
-                String testClassName = klass.getName() + "$" + testAnnotation.testClass();
-                String abstractionImplName = klass.getName() + "$" + testAnnotation.abstractionImpl();
+                String testClassName = testAnnotation.testClass().isEmpty() ? null : klass.getName() + "$" + testAnnotation.testClass();
+                String abstractionImplName = testAnnotation.abstractionImpl().isEmpty() ? null : klass.getName() + "$" + testAnnotation.abstractionImpl();
 
                 long t1 = System.currentTimeMillis();
-
-                // add default hooks
-                abstractionManager
-                        .addAnalysisHook(AbstractionManager.checkDependenciesForInterface(Abstraction.class, testAnnotation.fieldDependencies()))
-                        .addAnalysisHook(AbstractionManager.checkForExplicitImplementation(Abstraction.class))
-                        .addAnalysisHook(AbstractionManager.checkStaticFieldsNotNull());
 
                 // load hooks
                 List<Object> hooks = new ArrayList<>();
@@ -94,37 +162,48 @@ public class TestSystem {
                     hooks.add(hook);
                 }
 
-                // load, register and create abstraction impl
-                Class<?> implClass = ReflectUtil.getClass(abstractionImplName);
-                if (implClass == null)
-                    throw new IllegalArgumentException("Couldn't find implementation class by name " + abstractionImplName);
-                if (debug)
-                    System.out.println("DEBUG Test " + testName + ": Found abstraction impl " + implClass);
-                abstractionManager.registerImpl(implClass);
-                Object implInstance = implClass.getConstructor().newInstance();
+                Class<?> implClass  = null;
+                Object implInstance = null;
+                if (abstractionImplName != null) {
+                    // load, register and create abstraction impl
+                    implClass = ReflectUtil.getClass(abstractionImplName);
+                    if (implClass == null)
+                        throw new IllegalArgumentException("Couldn't find implementation class by name " + abstractionImplName);
+                    if (debug)
+                        System.out.println("DEBUG Test " + testName + ": Found abstraction impl " + implClass);
+                    abstractionManager.registerImpl(implClass);
+                    implInstance = implClass.getConstructor().newInstance();
+                }
 
                 long t2 = System.currentTimeMillis();
                 if (debug) System.out.println("DEBUG test " + testName + ": loading hooks and setup took " + (t2 - t1) + "ms");
 
                 // load and create test class
-                Class<?> testClass = abstractionManager.findClass(testClassName);
-                if (testClass == null)
-                    throw new IllegalArgumentException("Couldn't find test class by name " + abstractionImplName);
-                if (debug)
-                    System.out.println("DEBUG Test " + testName + ": Found test " + implClass);
-                Object testInstance = testClass.getConstructor().newInstance();
+                Class<?> testClass = null;
+                Object testInstance = null;
+                if (testClassName != null) {
+                    testClass = abstractionManager.findClass(testClassName);
+                    if (testClass == null)
+                        throw new IllegalArgumentException("Couldn't find test class by name " + abstractionImplName);
+                    if (debug)
+                        System.out.println("DEBUG Test " + testName + ": Found test " + implClass);
+                    testInstance = testClass.getConstructor().newInstance();
+                }
 
                 long t3 = System.currentTimeMillis();
                 if (debug) System.out.println("DEBUG test " + testName + ": loading and transforming test class took " + (t3 - t2) + "ms");
+
+                TestInterface testInterface = new TestInterface(klass, method.getName(), abstractionManager);
 
                 // order arguments
                 Object[] args = new Object[method.getParameterTypes().length];
                 for (int i = 0, n = method.getParameterTypes().length; i < n; i++) {
                     Class<?> type = method.getParameterTypes()[i];
 
-                    if (type.isAssignableFrom(implClass)) args[i] = implInstance;
-                    else if (type.isAssignableFrom(testClass)) args[i] = testInstance;
+                    if (implClass != null && type.isAssignableFrom(implClass)) args[i] = implInstance;
+                    else if (testClass != null && type.isAssignableFrom(testClass)) args[i] = testInstance;
                     else if (type.isAssignableFrom(AbstractionManager.class)) args[i] = abstractionManager;
+                    else if (TestInterface.class == type) args[i] = testInterface;
                     else for (var hook : hooks) if (type.isAssignableFrom(hook.getClass())) args[i] = hook;
                 }
 
@@ -133,6 +212,19 @@ public class TestSystem {
                     method.invoke(instance, args);
                 } catch (InvocationTargetException e) {
                     throw e.getCause();
+                }
+
+                if (testClass != null) {
+                    try {
+                        // check for testClass#run
+                        Method mRun = testClass.getDeclaredMethod("run");
+                        mRun.setAccessible(true);
+                        mRun.invoke(testInstance);
+                    } catch (NoSuchMethodException ignored) {
+
+                    } catch (InvocationTargetException e) {
+                        throw new RuntimeException("Exception while running " + testClass.getSimpleName() + "#run", e.getCause());
+                    }
                 }
 
                 long t4 = System.currentTimeMillis();

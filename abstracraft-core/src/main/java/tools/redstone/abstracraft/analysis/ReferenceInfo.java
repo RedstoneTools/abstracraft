@@ -14,6 +14,7 @@ public class ReferenceInfo {
     final String ownerClassName;
     final String name;
     final String desc;
+    final String signature;
     final Type type;
     final boolean isStatic;
 
@@ -27,6 +28,17 @@ public class ReferenceInfo {
         this.desc = desc;
         this.type = type;
         this.isStatic = isStatic;
+        this.signature = null;
+    }
+
+    public ReferenceInfo(String ownerInternalName, String ownerClassName, String name, String desc, Type type, boolean isStatic, String signature) {
+        this.ownerInternalName = ownerInternalName;
+        this.ownerClassName = ownerClassName;
+        this.name = name;
+        this.desc = desc;
+        this.type = type;
+        this.isStatic = isStatic;
+        this.signature = signature;
     }
 
     public String ownerInternalName() {
@@ -47,6 +59,10 @@ public class ReferenceInfo {
 
     public Type type() {
         return type;
+    }
+
+    public String signature() {
+        return signature;
     }
 
     public boolean isStatic() {
@@ -80,6 +96,11 @@ public class ReferenceInfo {
                 name, desc, Type.getMethodType(desc), isStatic);
     }
 
+    public static ReferenceInfo forMethodInfo(String ownerName, String name, String desc, String sig, boolean isStatic) {
+        return new ReferenceInfo(ownerName.replace('.', '/'), ownerName.replace('/', '.'),
+                name, desc, Type.getMethodType(desc), isStatic, sig);
+    }
+
     public static ReferenceInfo forMethodInfo(Class<?> klass, String name, boolean isStatic, Class<?> returnType, Class<?>... argTypes) {
         Type type = Type.getMethodType(Type.getType(returnType), ASMUtil.asTypes(argTypes));
         return new ReferenceInfo(klass.getName().replace('.', '/'), klass.getName(),
@@ -89,6 +110,11 @@ public class ReferenceInfo {
     public static ReferenceInfo forFieldInfo(String ownerName, String name, String desc, boolean isStatic) {
         return new ReferenceInfo(ownerName.replace('.', '/'), ownerName.replace('/', '.'),
                 name, desc, Type.getType(desc), isStatic);
+    }
+
+    public static ReferenceInfo forFieldInfo(String ownerName, String name, String desc, String sig, boolean isStatic) {
+        return new ReferenceInfo(ownerName.replace('.', '/'), ownerName.replace('/', '.'),
+                name, desc, Type.getType(desc), isStatic, sig);
     }
 
     /**

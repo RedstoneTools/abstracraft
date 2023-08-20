@@ -29,6 +29,7 @@ public class ReflectUtil {
     /* Method handles for cracking  */
     static final MethodHandle SETTER_Field_modifiers;
     static final MethodHandle ClassLoader_findLoadedClass;
+    static final MethodHandle ClassLoader_addClass;
     static final MethodHandles.Lookup INTERNAL_LOOKUP;
 
     static {
@@ -56,10 +57,15 @@ public class ReflectUtil {
 
             SETTER_Field_modifiers = INTERNAL_LOOKUP.findSetter(Field.class, "modifiers", Integer.TYPE);
             ClassLoader_findLoadedClass = INTERNAL_LOOKUP.findVirtual(ClassLoader.class, "findLoadedClass", MethodType.methodType(Class.class, String.class));
+            ClassLoader_addClass = INTERNAL_LOOKUP.findVirtual(ClassLoader.class, "addClass", MethodType.methodType(void.class, Class.class));
         } catch (Throwable t) {
             // throw exception in init
             throw new ExceptionInInitializerError(t);
         }
+    }
+
+    public static MethodHandles.Lookup getInternalLookup() {
+        return INTERNAL_LOOKUP;
     }
 
     public static Unsafe getUnsafe() {
@@ -196,6 +202,14 @@ public class ReflectUtil {
         return klass.hashCode() != 0;
     }
 
+    public static ClassLoader rootClassLoader(ClassLoader loader) {
+        while (loader.getParent() != null) {
+            loader = loader.getParent();
+        }
+
+        return loader;
+    }
+
     public static ClassLoader transformingClassLoader(Predicate<String> namePredicate,
                                                       ClassTransformer transformer,
                                                       int writerFlags) {
@@ -238,10 +252,19 @@ public class ReflectUtil {
                         transformer.transform(name, reader, writer);
                         bytes = writer.toByteArray();
 
-                        return defineClass(name, bytes, 0, bytes.length);
+                        // define the class
+                        klass = defineClass(name, bytes, 0, bytes.length);
+
+                        // register the class as loaded by all
+                        // class loaders in the parent chain
+                        for (ClassLoader current = this.getParent(); current != null; current = current.getParent()) {
+                            ClassLoader_addClass.invoke(current, klass);
+                        }
+
+                        return klass;
                     }
-                } catch (Exception e) {
-                    throw new RuntimeException("While loading class " + name, e);
+                } catch (Throwable t) {
+                    throw new RuntimeException("While loading class " + name, t);
                 }
             }
 

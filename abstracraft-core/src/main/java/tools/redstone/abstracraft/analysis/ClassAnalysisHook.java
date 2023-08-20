@@ -1,6 +1,9 @@
 package tools.redstone.abstracraft.analysis;
 
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Type;
 import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.util.MethodWriter;
 
 /**
  * Used to extend functionality of the dependency analyzer.
@@ -22,6 +25,15 @@ public interface ClassAnalysisHook {
         default void postAnalyze() { }
     }
 
+    interface MethodVisitorHook {
+        /* All methods return whether they intercepted something */
+        default boolean visitMethodInsn(AnalysisContext ctx, int opcode, ReferenceInfo info) { return false; }
+        default boolean visitInsn(AnalysisContext ctx, int opcode) { return false; }
+        default boolean visitTypeInsn(AnalysisContext ctx, int opcode, Type type) { return false; }
+        default boolean visitVarInsn(AnalysisContext ctx, int opcode, int varIndex, Type type, String signature) { return false; }
+        default boolean visitFieldInsn(AnalysisContext ctx, int opcode, ReferenceInfo fieldInfo) { return false; }
+    }
+
     // When this hook is registered to the given manager
     default void onRegister(AbstractionManager manager) { }
 
@@ -33,6 +45,9 @@ public interface ClassAnalysisHook {
 
     // When a new method is entered to be analyzed
     default void enterMethod(AnalysisContext context) { }
+
+    // When a new method is entered to be analyzed and transformed, you can hook into it
+    default MethodVisitorHook visitMethod(AnalysisContext context, MethodWriter writer) { return null; }
 
     // When a method has finished analyzing
     default void leaveMethod(AnalysisContext context) { }
