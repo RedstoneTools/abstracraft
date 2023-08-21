@@ -1,5 +1,7 @@
 package tools.redstone.abstracraft.analysis;
 
+import org.objectweb.asm.tree.ClassNode;
+
 import java.util.*;
 import java.util.function.Supplier;
 
@@ -26,6 +28,10 @@ public class ReferenceAnalysis {
         this.analyzer = analyzer;
         this.ref = ref;
         this.field = ref.isField();
+    }
+
+    public ClassNode classNode() {
+        return analyzer.getClassNode();
     }
 
     @SuppressWarnings("unchecked")

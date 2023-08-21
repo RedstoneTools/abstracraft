@@ -56,6 +56,6 @@ public interface ClassAnalysisHook {
     default Boolean isDependencyCandidate(AnalysisContext context, ReferenceInfo ref) { return null; }
 
     // Dependency presence checks
-    default Boolean checkImplemented(AbstractionManager manager, ReferenceInfo ref, Class<?> refClass) throws Throwable { return null; }
+    default Boolean checkImplemented(AbstractionManager manager, ReferenceInfo ref) throws Throwable { return null; }
 
 }

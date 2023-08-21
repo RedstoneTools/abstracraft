@@ -72,6 +72,7 @@ public class ASMUtil {
             case Type.SHORT -> short.class;
             case Type.VOID -> void.class;
             case Type.OBJECT -> ReflectUtil.getClass(type.getClassName());
+            case Type.METHOD -> asClass(type.getReturnType());
             default -> throw new AssertionError();
         };
     }

@@ -8,7 +8,6 @@ import tools.redstone.abstracraft.usage.Abstraction;
 import tools.redstone.abstracraft.usage.NoneImplementedException;
 import tools.redstone.abstracraft.usage.NotImplementedException;
 import tools.redstone.abstracraft.usage.Usage;
-import tools.redstone.abstracraft.util.PackageWalker;
 
 public class SimpleDependencyTest {
 

@@ -178,7 +178,7 @@ public class ReflectUtil {
      * @param name The class name.
      * @return The loaded class or null if unloaded.
      */
-    public static Class<?> findLoadedClass(ClassLoader loader, String name) {
+    public static Class<?> findLoadedClassInParents(ClassLoader loader, String name) {
         try {
             while (loader != null) {
                 Class<?> klass = (Class<?>) ClassLoader_findLoadedClass.invoke(loader, name);
@@ -190,6 +190,15 @@ public class ReflectUtil {
             }
 
             return null;
+        } catch (Throwable t) {
+            t.printStackTrace();
+            return null;
+        }
+    }
+
+    public static Class<?> findLoadedClass(ClassLoader loader, String name) {
+        try {
+            return (Class<?>) ClassLoader_findLoadedClass.invoke(loader, name);
         } catch (Throwable t) {
             t.printStackTrace();
             return null;
@@ -229,7 +238,7 @@ public class ReflectUtil {
                     return super.loadClass(name);
                 }
 
-                Class<?> klass = ReflectUtil.findLoadedClass(this, name);
+                Class<?> klass = ReflectUtil.findLoadedClassInParents(this, name);
                 if (klass != null) {
                     if (warnLoaded && klass.getClassLoader() != this) {
                         System.out.println("WARNING Found loaded class " + name + " in loader " + klass.getClassLoader());

@@ -38,6 +38,7 @@ public class Abstracraft {
      * The abstraction manager.
      */
     private final AbstractionManager manager = new AbstractionManager()
+            .addAnalysisHook(AbstractionManager.excludeCallsOnSelfAsDependencies())
             .addAnalysisHook(AbstractionManager.checkDependenciesForInterface(Abstraction.class, true))
             .addAnalysisHook(AbstractionManager.checkStaticFieldsNotNull())
             .addAnalysisHook(AbstractionManager.checkForExplicitImplementation(Abstraction.class))

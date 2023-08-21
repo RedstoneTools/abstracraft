@@ -2,18 +2,16 @@ package tools.redstone.abstracraft.analysis;
 
 import tools.redstone.abstracraft.AbstractionManager;
 
-import java.util.Objects;
-
 /**
  * Represents the dependency of a piece of code on a specific method.
  */
-public record MethodDependency(
+public record ReferenceDependency(
         boolean optional,
         ReferenceInfo info,
         Boolean implemented
 ) implements Dependency {
-    public MethodDependency asOptional(boolean optional) {
-        return new MethodDependency(optional, info, implemented);
+    public ReferenceDependency asOptional(boolean optional) {
+        return new ReferenceDependency(optional, info, implemented);
     }
 
     @Override
@@ -24,8 +22,8 @@ public record MethodDependency(
     }
 
     public String toString() {
-        return "MethodDependency(" + (optional ? "optional " : "required ") +
-                info.ownerClassName() + "." + info.name() +
+        return "RefDependency(" + (optional ? "optional " : "required ") +
+                info.className() + "." + info.name() +
                 ')';
     }
 
@@ -33,7 +31,7 @@ public record MethodDependency(
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        MethodDependency that = (MethodDependency) o;
+        ReferenceDependency that = (ReferenceDependency) o;
         return info.equals(that.info) && implemented == that.implemented;
     }
 

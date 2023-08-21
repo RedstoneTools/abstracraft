@@ -138,15 +138,10 @@ public class AbstractionManager {
     // Check whether the given ref is implemented
     // without referencing the cache
     private boolean isImplemented0(ReferenceInfo ref) {
-        // get abstraction class
-        Class<?> refClass = ReflectUtil.getClass(ref.ownerClassName());
-        if (refClass == null)
-            return false;
-
         try {
             // check hooks
             for (var hook : analysisHooks) {
-                var res = hook.checkImplemented(this, ref, refClass);
+                var res = hook.checkImplemented(this, ref);
                 if (res == null) continue;
                 return res;
             }
@@ -203,10 +198,10 @@ public class AbstractionManager {
      * @param dependencies The dependencies.
      * @return Whether they are all implemented.
      */
-    public boolean areAllRequiredImplemented(List<MethodDependency> dependencies) {
+    public boolean areAllRequiredImplemented(List<ReferenceDependency> dependencies) {
         return areAllImplemented(dependencies.stream()
                 .filter(d -> !d.optional())
-                .map(MethodDependency::info)
+                .map(ReferenceDependency::info)
                 .toList());
     }
 
@@ -236,11 +231,11 @@ public class AbstractionManager {
         try {
             className = className.replace('.', '/');
 
-            if (ignoreLoadedClasses && ReflectUtil.findLoadedClass(transformingClassLoader, publicName) != null) {
+            if (ignoreLoadedClasses && ReflectUtil.findLoadedClassInParents(transformingClassLoader, publicName) != null) {
                 return null;
             }
 
-            if (!classAuditPredicate.test(publicName)) {
+            if (!shouldTransformClass(publicName)) {
                 return null;
             }
 
@@ -270,7 +265,15 @@ public class AbstractionManager {
         return analyzer(klass.getName(), false);
     }
 
-    public ReferenceAnalysis getMethodAnalysis(ReferenceInfo info) {
+    public ClassDependencyAnalyzer analyzerOrNull(String name) {
+        return analyzerMap.get(name.replace('/', '.'));
+    }
+
+    public ClassDependencyAnalyzer analyzerOrNull(Class<?> klass) {
+        return analyzerOrNull(klass.getName());
+    }
+
+    public ReferenceAnalysis getReferenceAnalysis(ReferenceInfo info) {
         return refAnalysisMap.get(info);
     }
 
@@ -300,8 +303,8 @@ public class AbstractionManager {
      */
     public ReferenceAnalysis publicReference(AnalysisContext context, ReferenceInfo info) {
         // check for cached
-        var analysis = getMethodAnalysis(info);
-        if (analysis != null && analysis.complete && !analysis.partial)
+        var analysis = getReferenceAnalysis(info);
+        if (analysis != null && analysis.complete && (!analysis.partial || info.isField()))
             return analysis;
 
         // fields are always partial
@@ -314,15 +317,11 @@ public class AbstractionManager {
         }
 
         // analyze through owner class
-        ClassDependencyAnalyzer analyzer = this.analyzer(info.ownerInternalName(), true);
+        ClassDependencyAnalyzer analyzer = this.analyzer(info.internalClassName(), true);
         if (analyzer == null) {
             if (analysis != null)
                 return analysis;
-            analysis = new ReferenceAnalysis(partialAnalyzer, info);
-            analysis.partial = true;
-            analysis.complete = true;
-            refAnalysisMap.put(info, analysis);
-            return analysis;
+            return analysis = makePartial(info);
         } else if (analysis != null && analysis.partial) {
             // use actual analyzer to replace partial analysis
             var newAnalysis = analyzer.localMethod(context, info);
@@ -335,6 +334,14 @@ public class AbstractionManager {
         }
 
         return analyzer.localMethod(context, info);
+    }
+
+    public ReferenceAnalysis makePartial(ReferenceInfo info) {
+        var analysis = new ReferenceAnalysis(partialAnalyzer, info);
+        analysis.partial = true;
+        analysis.complete = true;
+        refAnalysisMap.put(info, analysis);
+        return analysis;
     }
 
     public boolean allImplemented(Class<?> klass) {
@@ -372,27 +379,88 @@ public class AbstractionManager {
         });
     }
 
+    public boolean shouldTransformClass(String name) {
+        return !name.startsWith("java") && classAuditPredicate.test(name);
+    }
+
     /* ------------ Hooks -------------- */
 
-    public record ClassInheritanceChecker(Class<?> itf, Map<String, Boolean> cache) {
+    public record ClassInheritanceChecker(Class<?> itf, String itfInternalName, Map<String, Boolean> cache) {
+        // Class inheritance checkers by class checked
         private static final Map<Class<?>, ClassInheritanceChecker> checkerCache = new HashMap<>();
 
         public static ClassInheritanceChecker forClass(Class<?> itf) {
-            return checkerCache.computeIfAbsent(itf, __ -> new ClassInheritanceChecker(itf, new HashMap<>()));
+            return checkerCache.computeIfAbsent(itf, __ -> new ClassInheritanceChecker(itf, itf.getName().replace('.', '/'), new HashMap<>()));
         }
 
-        public boolean from(AbstractionManager mgr, String name) {
+        /**
+         * Checks whether the class/interface by the given name inherits
+         * from this checker's class/interface.
+         *
+         * @param mgr The manager to resolve analyzers.
+         * @param name The name of the class.
+         * @return Whether the class inherits it.
+         */
+        public boolean checkClassInherits(AbstractionManager mgr, String name) {
             Boolean b = cache.get(name);
             if (b != null)
                 return b;
 
             try {
-                cache.put(name, b = itf.isAssignableFrom(mgr.findClass(name)));
+                // check for loaded class
+                Class<?> klass = ReflectUtil.findLoadedClass(mgr.transformingClassLoader, name);
+                if (klass != null) {
+                    cache.put(name, b = itf.isAssignableFrom(klass));
+                    return b;
+                }
+
+                // check for transform predicate, if false just
+                // load the class using the manager class loader.
+                // also, if were not currently transforming the class
+                // we can safely transform it now without repercussions
+                if (!mgr.shouldTransformClass(name) || mgr.analyzerOrNull(name) == null) {
+                    cache.put(name, b = itf.isAssignableFrom(mgr.findClass(name)));
+                    return b;
+                }
+
+                // analyze class node from analyzer
+                // to find inheritance (shit)
+                var analyzer = mgr.analyzerOrNull(name);
+                var classNode = analyzer.getClassNode();
+
+                b = checkClassInherits(mgr, classNode.superName.replace('/', '.'));
+                int i = 0, n = classNode.interfaces.size();
+                while (!b && i < n) { // try to find in interfaces
+                    b = checkClassInherits(mgr, classNode.interfaces.get(i++).replace('/', '.'));
+                }
+
+                cache.put(name, b);
                 return b;
             } catch (Exception e) {
                 return false;
             }
         }
+    }
+
+    /** Stops the given methods from being included as dependencies */
+    public static ClassAnalysisHook excludeNamesAsDependencies(final String... names) {
+        final Set<String> nameSet = Set.of(names);
+        return new ClassAnalysisHook() {
+            @Override
+            public Boolean isDependencyCandidate(AnalysisContext context, ReferenceInfo ref) {
+                return nameSet.contains(ref.name()) ? false : null;
+            }
+        };
+    }
+
+    /** Excludes calls on methods of the calling class as dependencies */
+    public static ClassAnalysisHook excludeCallsOnSelfAsDependencies() {
+        return new ClassAnalysisHook() {
+            @Override
+            public Boolean isDependencyCandidate(AnalysisContext context, ReferenceInfo ref) {
+                return ref.className().equals(context.currentMethod().className()) ? false : null;
+            }
+        };
     }
 
     /** Allows dependencies which call to a class implementing the given interface */
@@ -403,7 +471,9 @@ public class AbstractionManager {
             public Boolean isDependencyCandidate(AnalysisContext context, ReferenceInfo ref) {
                 if (!includeFields && ref.isField())
                     return null;
-                return checker.from(context.abstractionManager(), ref.ownerClassName()) ? true : null;
+                if (!checker.checkClassInherits(context.abstractionManager(), ref.className()))
+                    return false;
+                return true;
             }
         };
     }
@@ -435,7 +505,7 @@ public class AbstractionManager {
                             @Override
                             public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
                                 // check for Abstraction#unimplemented call
-                                if (checker.from(manager, owner.replace('/', '.')) && "unimplemented".equals(name) && descriptor.startsWith("()")) {
+                                if (checker.checkClassInherits(manager, owner.replace('/', '.')) && "unimplemented".equals(name) && descriptor.startsWith("()")) {
                                     unimplementedMethods.add(currentMethod);
                                 }
                             }
@@ -448,9 +518,10 @@ public class AbstractionManager {
             }
 
             @Override
-            public Boolean checkImplemented(AbstractionManager manager, ReferenceInfo ref, Class<?> refClass) throws Throwable {
+            public Boolean checkImplemented(AbstractionManager manager, ReferenceInfo ref) throws Throwable {
                 if (ref.isField())
                     return null; // nothing to say
+                var refClass = ReflectUtil.getClass(ref.className());
 
                 // get implementation class for abstraction
                 Class<?> implClass = manager.getImplByClass(refClass);
@@ -474,12 +545,12 @@ public class AbstractionManager {
     public static ClassAnalysisHook checkStaticFieldsNotNull() {
         return new ClassAnalysisHook() {
             @Override
-            public Boolean checkImplemented(AbstractionManager manager, ReferenceInfo ref, Class<?> refClass) throws Throwable {
+            public Boolean checkImplemented(AbstractionManager manager, ReferenceInfo ref) throws Throwable {
                 if (!ref.isField() || !ref.isStatic()) // nothing to say
                     return null;
 
                 // find field
-                Field field = refClass.getField(ref.name());
+                Field field = ReflectUtil.getClass(ref.className()).getField(ref.name());
                 field.setAccessible(true);
 
                 // check field set

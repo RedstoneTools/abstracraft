@@ -3,7 +3,6 @@ package tools.redstone.abstracraft.analysis;
 import tools.redstone.abstracraft.AbstractionManager;
 
 import java.io.PrintStream;
-import java.io.PrintWriter;
 import java.util.Stack;
 
 public class AnalysisContext {
@@ -32,8 +31,10 @@ public class AnalysisContext {
     }
 
     // Updates the context when entering a method, assumes shits already on the stacks.
-    void enteredMethod() {
-
+    void enteredMethod(ReferenceInfo info,
+                       Stack<Object> computeStack) {
+        analysisStack.push(info);
+        computeStacks.push(computeStack);
     }
 
     void printAnalysisTrace(PrintStream stream) {
@@ -57,15 +58,14 @@ public class AnalysisContext {
         var curr = currentMethod();
         if (curr == null)
             return null;
-        return abstractionManager.getMethodAnalysis(curr);
+        return abstractionManager.getReferenceAnalysis(curr);
     }
 
-    /** Gets a CLONE of the current compute stack */
-    @SuppressWarnings("unchecked")
+    /** Gets the current compute stack */
     public Stack<Object> currentComputeStack() {
         if (computeStacks.isEmpty())
             return null;
-        return (Stack<Object>) computeStacks.peek().clone();
+        return computeStacks.peek();
     }
 
 }

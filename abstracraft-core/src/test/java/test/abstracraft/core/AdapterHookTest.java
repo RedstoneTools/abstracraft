@@ -18,10 +18,6 @@ public class AdapterHookTest {
     public static class InternalB { public final String hello = "HELLO"; }
 
     public static class AImpl extends HandleAbstraction<InternalA> implements A {
-        static {
-            new Exception().printStackTrace();
-        }
-
         public AImpl(InternalA handle) {
             super(handle);
         }
@@ -59,7 +55,7 @@ public class AdapterHookTest {
         AdapterRegistry.getInstance().register(Adapter.handle(B.class, InternalB.class));
 
         // execute run
-        itf.runTransformed(null, "run");
+        itf.runTransformed("run");
     }
 
 }

@@ -8,7 +8,7 @@ import tools.redstone.abstracraft.adapter.AdapterAnalysisHook;
 import tools.redstone.abstracraft.adapter.AdapterRegistry;
 import tools.redstone.abstracraft.analysis.Dependency;
 import tools.redstone.abstracraft.analysis.ClassAnalysisHook;
-import tools.redstone.abstracraft.analysis.MethodDependency;
+import tools.redstone.abstracraft.analysis.ReferenceDependency;
 import tools.redstone.abstracraft.analysis.RequireOneDependency;
 import tools.redstone.abstracraft.usage.Abstraction;
 import tools.redstone.abstracraft.util.ReflectUtil;
@@ -89,6 +89,11 @@ public class TestSystem {
                 throw new RuntimeException("Error while executing " + cName + "#" + mName, t);
             }
         }
+
+        @SuppressWarnings("unchecked")
+        public <T> T runTransformed(String mName, Object... args) {
+            return runTransformed(null, mName, args);
+        }
     }
 
     // Signifies a test
@@ -134,6 +139,7 @@ public class TestSystem {
                         new AbstractionManager()
                         .setClassAuditPredicate(name -> name.startsWith(klass.getName()))
                         .setRequiredMethodPredicate(m -> m.ref.name().startsWith("test"))
+                        .addAnalysisHook(AbstractionManager.excludeCallsOnSelfAsDependencies())
                         .addAnalysisHook(AbstractionManager.checkDependenciesForInterface(Abstraction.class, testAnnotation.fieldDependencies()))
                         .addAnalysisHook(AbstractionManager.checkForExplicitImplementation(Abstraction.class))
                         .addAnalysisHook(AbstractionManager.checkStaticFieldsNotNull())
@@ -309,9 +315,9 @@ public class TestSystem {
             String name = split2[1];
 
             for (Dependency dep : actual) {
-                if (!(dep instanceof MethodDependency dependency)) continue;
+                if (!(dep instanceof ReferenceDependency dependency)) continue;
                 if (dependency.optional() == optional && dependency.info().name().equals(name) &&
-                        dependency.info().ownerClassName().endsWith(cl)) {
+                        dependency.info().className().endsWith(cl)) {
                     count++;
                     break;
                 }
@@ -360,9 +366,9 @@ public class TestSystem {
                 String name = split2[1];
 
                 for (Dependency dep : list) {
-                    if (!(dep instanceof MethodDependency dependency)) continue;
+                    if (!(dep instanceof ReferenceDependency dependency)) continue;
                     if (dependency.optional() == optional && dependency.info().name().equals(name) &&
-                            dependency.info().ownerClassName().endsWith(cl)) {
+                            dependency.info().className().endsWith(cl)) {
                         found = dependency;
                         break;
                     }

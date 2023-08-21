@@ -2,10 +2,14 @@ package tools.redstone.abstracraft.adapter;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.util.TraceClassVisitor;
+import tools.redstone.abstracraft.AbstractionManager;
 import tools.redstone.abstracraft.analysis.*;
 import tools.redstone.abstracraft.util.ASMUtil;
 import tools.redstone.abstracraft.util.MethodWriter;
 
+import java.io.PrintWriter;
 import java.util.function.Function;
 
 public class AdapterAnalysisHook implements ClassAnalysisHook {
@@ -15,13 +19,13 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
     static final Type TYPE_Function = Type.getType(Function.class);
     static final String NAME_Function = TYPE_Function.getInternalName();
 
-    private final String adaptMethodOwner;
-    private final AdapterRegistry adapterRegistry;
-    private int adapterIdCounter = 0;
+    private final AdapterRegistry adapterRegistry;                               // The adapter registry to source adapters from
+    private int adapterIdCounter = 0;                                            // The counter for the $$adapter_xx fields
+    private final AbstractionManager.ClassInheritanceChecker inheritanceChecker; // The inheritance checker to check for `adapt` calls
 
     public AdapterAnalysisHook(Class<?> adaptMethodOwner, AdapterRegistry adapterRegistry) {
-        this.adaptMethodOwner = adaptMethodOwner.getName().replace('.', '/');
         this.adapterRegistry = adapterRegistry;
+        inheritanceChecker = AbstractionManager.ClassInheritanceChecker.forClass(adaptMethodOwner);
     }
 
     static class TrackedReturnValue {
@@ -41,8 +45,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
             @Override
             public boolean visitMethodInsn(AnalysisContext ctx, int opcode, ReferenceInfo info) {
                 // check for #adapt(Object)
-                if (info.ownerInternalName().equals(adaptMethodOwner) && info.name().equals("adapt")) {
-                    System.out.println("FOUND ADAPT CALL " + info);
+                if (inheritanceChecker.checkClassInherits(ctx.abstractionManager(), info.className()) && info.name().equals("adapt")) {
                     boolean isStatic = opcode == Opcodes.INVOKESTATIC;
                     Object instanceValue = isStatic ? context.currentComputeStack().pop() : null;
                     Object srcValue = context.currentComputeStack().pop();
@@ -54,20 +57,23 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
 
                     // add field to class
                     String fieldName = "$$adapter_" + (adapterIdCounter++);
-                    currAnalysis.analyzer.getClassNode()
+                    currAnalysis.classNode()
                             // create static field
                             .visitField(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, fieldName, TYPE_Function.getDescriptor(), TYPE_Function.getDescriptor(), null /* set in static initializer */);
 
-                    // potentially modify <cinit>
+                    // potentially modify <clinit>
                     writer.addInsn(v -> {
                         String dstType = trackedReturnValue.dstType;
                         if (dstType == null)
                             return;
 
                         // modify <cinit>
-                        var mCInit = ASMUtil.findMethod(currAnalysis.analyzer.getClassNode(), "<cinit>", "()V");
-                        if (mCInit == null)
-                            throw new IllegalStateException("what?");
+                        var mCInit = ASMUtil.findMethod(currAnalysis.classNode(), "<clinit>", "()V");
+                        boolean created = false;
+                        if (mCInit == null) {
+                            mCInit = (MethodNode) currAnalysis.classNode().visitMethod(Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC, "<clinit>", "()V", "()V", new String[] { });
+                            created = true;
+                        }
 
                         mCInit.visitCode();
 
@@ -75,7 +81,8 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                         mCInit.visitLdcInsn(srcType);
                         mCInit.visitLdcInsn(dstType);
                         mCInit.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TYPE_AdapterRegistry.getInternalName(), "lazyRequireMonoDirectional", "(Ljava/lang/String;Ljava/lang/String;)" + TYPE_Function.getDescriptor(), false);
-                        mCInit.visitFieldInsn(Opcodes.PUTSTATIC, currMethod.ownerInternalName(), fieldName, TYPE_Function.getDescriptor());
+                        mCInit.visitFieldInsn(Opcodes.PUTSTATIC, currMethod.internalClassName(), fieldName, TYPE_Function.getDescriptor());
+                        if (created) mCInit.visitInsn(Opcodes.RETURN);
 
                         mCInit.visitEnd();
                     });
@@ -100,7 +107,8 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                         }
 
                         // push adapter and swap
-                        v.visitFieldInsn(Opcodes.GETFIELD, currMethod.ownerClassName(), fieldName, TYPE_Function.getDescriptor());
+                        v.visitVarInsn(Opcodes.ALOAD, 0);
+                        v.visitFieldInsn(Opcodes.GETFIELD, currMethod.internalClassName(), fieldName, TYPE_Function.getDescriptor());
                         v.visitInsn(Opcodes.SWAP); // val - function
 
                         // make it call Function#apply

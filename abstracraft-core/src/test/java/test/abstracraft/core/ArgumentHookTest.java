@@ -138,9 +138,11 @@ public class ArgumentHookTest {
         }
     }
 
-    @TestSystem.Test(testClass = "TestClass", abstractionImpl = "CommandContextImpl", hooks = {"MyHook"})
+    @TestSystem.Test(testClass = "TestClass", abstractionImpl = "CommandContextImpl", hooks = {"ArgumentUsageHook"})
     void test_ArgHook(ArgumentUsageHook hook, Tests tests, CommandContext ctx, AbstractionManager abstractionManager) {
-        System.out.println("Exclude Argument fields: " + hook.excludeFields);
+        System.out.println(" ⚠ Exclude Argument fields: " + hook.excludeFields);
+        // todo: write actual tests
+        //  rn just manually review the output of println
     }
 
 }

@@ -3,12 +3,11 @@ package tools.redstone.abstracraft.analysis;
 import tools.redstone.abstracraft.AbstractionManager;
 
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Records the result of a dependency switch.
  */
-public record RequireOneDependency(List<MethodDependency> dependencies, List<MethodDependency> optionalDependencies, boolean implemented) implements Dependency {
+public record RequireOneDependency(List<ReferenceDependency> dependencies, List<ReferenceDependency> optionalDependencies, boolean implemented) implements Dependency {
     @Override
     public boolean isImplemented(AbstractionManager manager) {
         return this.implemented;
