@@ -6,7 +6,6 @@ import tools.redstone.abstracraft.HandleAbstraction;
 import tools.redstone.abstracraft.adapter.Adapter;
 import tools.redstone.abstracraft.adapter.AdapterRegistry;
 import tools.redstone.abstracraft.usage.Abstraction;
-import tools.redstone.abstracraft.util.PackageWalker;
 
 public class AdapterHookTest {
 

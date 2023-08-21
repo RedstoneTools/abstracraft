@@ -130,8 +130,6 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                         v.visitMethodInsn(Opcodes.INVOKEINTERFACE, NAME_Function, "apply", "(Ljava/lang/Object;)Ljava/lang/Object;", true);
                     });
 
-                    context.currentComputeStack().push(new Object());
-
                     return true;
                 }
 
@@ -155,7 +153,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
             @Override
             public boolean visitFieldInsn(AnalysisContext ctx, int opcode, ReferenceInfo fieldInfo) {
                 if ((opcode == Opcodes.PUTFIELD || opcode == Opcodes.PUTSTATIC) &&
-                        ctx.currentComputeStack().peek() instanceof TrackedReturnValue rv) {
+                        ctx.currentComputeStack().peekOrNull() instanceof TrackedReturnValue rv) {
                     if (opcode == Opcodes.PUTFIELD) ctx.currentComputeStack().pop();
                     ctx.currentComputeStack().pop();
 
@@ -168,7 +166,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
 
             @Override
             public boolean visitInsn(AnalysisContext ctx, int opcode) {
-                if (opcode == Opcodes.ARETURN && !ctx.currentComputeStack().isEmpty() && ctx.currentComputeStack().peek() instanceof TrackedReturnValue rv) {
+                if (opcode == Opcodes.ARETURN && ctx.currentComputeStack().peekOrNull() instanceof TrackedReturnValue rv) {
                     ctx.currentComputeStack().pop();
 
                     rv.dstType = ctx.currentMethod().type().getReturnType().getDescriptor();
@@ -180,7 +178,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
 
             @Override
             public boolean visitTypeInsn(AnalysisContext ctx, int opcode, Type type) {
-                if (opcode == Opcodes.CHECKCAST && !ctx.currentComputeStack().isEmpty() && ctx.currentComputeStack().peek() instanceof TrackedReturnValue rv) {
+                if (opcode == Opcodes.CHECKCAST && ctx.currentComputeStack().peekOrNull() instanceof TrackedReturnValue rv) {
                     ctx.currentComputeStack().pop();
                     ctx.currentComputeStack().push(new ClassDependencyAnalyzer.InstanceOf(type));
 
