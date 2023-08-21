@@ -1,7 +1,7 @@
 package tools.redstone.abstracraft.adapter;
 
 import org.objectweb.asm.Type;
-import tools.redstone.abstracraft.util.ASMUtil;
+import tools.redstone.abstracraft.util.asm.ASMUtil;
 
 import java.util.ArrayList;
 import java.util.List;

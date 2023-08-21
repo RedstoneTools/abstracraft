@@ -3,7 +3,7 @@ package tools.redstone.abstracraft;
 import org.objectweb.asm.*;
 import tools.redstone.abstracraft.analysis.*;
 import tools.redstone.abstracraft.usage.Abstraction;
-import tools.redstone.abstracraft.util.ASMUtil;
+import tools.redstone.abstracraft.util.asm.ASMUtil;
 import tools.redstone.abstracraft.util.PackageWalker;
 import tools.redstone.abstracraft.util.ReflectUtil;
 

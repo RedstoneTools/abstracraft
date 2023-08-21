@@ -5,7 +5,7 @@ import org.objectweb.asm.tree.ClassNode;
 import java.util.*;
 import java.util.function.Supplier;
 
-import static tools.redstone.abstracraft.util.CollectionUtil.addIfNotNull;
+import static tools.redstone.abstracraft.util.data.CollectionUtil.addIfNotNull;
 
 /**
  * Stores data about a reference. If not partial, this will also include

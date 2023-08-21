@@ -1,4 +1,4 @@
-package tools.redstone.abstracraft.util;
+package tools.redstone.abstracraft.util.data;
 
 import java.util.ArrayList;
 import java.util.Collection;

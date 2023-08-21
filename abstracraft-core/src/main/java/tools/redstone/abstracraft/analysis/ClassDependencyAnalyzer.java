@@ -4,17 +4,16 @@ import org.objectweb.asm.*;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.util.TraceClassVisitor;
 import tools.redstone.abstracraft.AbstractionManager;
 import tools.redstone.abstracraft.usage.NotImplementedException;
 import tools.redstone.abstracraft.usage.Usage;
-import tools.redstone.abstracraft.util.ASMUtil;
-import tools.redstone.abstracraft.util.CollectionUtil;
-import tools.redstone.abstracraft.util.Container;
-import tools.redstone.abstracraft.util.MethodWriter;
+import tools.redstone.abstracraft.util.asm.ASMUtil;
+import tools.redstone.abstracraft.util.data.CollectionUtil;
+import tools.redstone.abstracraft.util.data.Container;
+import tools.redstone.abstracraft.util.asm.MethodWriter;
 import tools.redstone.abstracraft.util.ReflectUtil;
+import tools.redstone.abstracraft.util.data.ExStack;
 
-import java.io.PrintWriter;
 import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -189,7 +188,7 @@ public class ClassDependencyAnalyzer {
         classAnalysis.analyzedMethods.put(currentMethodInfo, currentMethodAnalysis);
 
         // Tries to estimate/track the current compute stack
-        final Stack<Object> computeStack = new Stack<>();
+        final ExStack<Object> computeStack = new ExStack<>();
 
         context.enteredMethod(currentMethodInfo, computeStack);
         for (var hook : hooks) hook.enterMethod(context);

@@ -1,4 +1,4 @@
-package tools.redstone.abstracraft.util;
+package tools.redstone.abstracraft.util.asm;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -6,6 +6,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 import tools.redstone.abstracraft.analysis.ReferenceInfo;
+import tools.redstone.abstracraft.util.ReflectUtil;
 
 import java.lang.reflect.Array;
 

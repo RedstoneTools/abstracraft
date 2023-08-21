@@ -4,7 +4,7 @@ import tools.redstone.abstracraft.AbstractionManager;
 import tools.redstone.abstracraft.analysis.*;
 import tools.redstone.abstracraft.usage.Abstraction;
 import tools.redstone.abstracraft.usage.Usage;
-import tools.redstone.abstracraft.util.ASMUtil;
+import tools.redstone.abstracraft.util.asm.ASMUtil;
 
 import java.util.*;
 

@@ -1,4 +1,4 @@
-package tools.redstone.abstracraft.util;
+package tools.redstone.abstracraft.util.data;
 
 public class Container<T> {
     public T value;

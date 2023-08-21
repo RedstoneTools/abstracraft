@@ -1,6 +1,7 @@
 package tools.redstone.abstracraft.analysis;
 
 import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.util.data.ExStack;
 
 import java.io.PrintStream;
 import java.util.Stack;
@@ -18,7 +19,7 @@ public class AnalysisContext {
     public final Stack<ReferenceInfo> analysisStack = new Stack<>();
 
     // The current compute stacks from the methods.
-    final Stack<Stack<Object>> computeStacks = new Stack<>();
+    final Stack<ExStack<Object>> computeStacks = new Stack<>();
 
     public AnalysisContext(AbstractionManager abstractionManager) {
         this.abstractionManager = abstractionManager;
@@ -32,7 +33,7 @@ public class AnalysisContext {
 
     // Updates the context when entering a method, assumes shits already on the stacks.
     void enteredMethod(ReferenceInfo info,
-                       Stack<Object> computeStack) {
+                       ExStack<Object> computeStack) {
         analysisStack.push(info);
         computeStacks.push(computeStack);
     }
@@ -62,10 +63,18 @@ public class AnalysisContext {
     }
 
     /** Gets the current compute stack */
-    public Stack<Object> currentComputeStack() {
+    public ExStack<Object> currentComputeStack() {
         if (computeStacks.isEmpty())
             return null;
         return computeStacks.peek();
+    }
+
+    /** Get a clone of the current compute stack */
+    @SuppressWarnings("unchecked")
+    public ExStack<Object> cloneComputeStack() {
+        try {
+            return (ExStack<Object>) currentComputeStack().clone();
+        } catch (Exception e) { throw new RuntimeException(e); }
     }
 
 }

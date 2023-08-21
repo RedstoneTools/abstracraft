@@ -1,9 +1,8 @@
 package tools.redstone.abstracraft.analysis;
 
-import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 import tools.redstone.abstracraft.AbstractionManager;
-import tools.redstone.abstracraft.util.MethodWriter;
+import tools.redstone.abstracraft.util.asm.MethodWriter;
 
 /**
  * Used to extend functionality of the dependency analyzer.

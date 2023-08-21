@@ -1,9 +1,10 @@
-package tools.redstone.abstracraft.util;
+package tools.redstone.abstracraft.util.asm;
 
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import tools.redstone.abstracraft.util.asm.ASMUtil;
 
 import java.util.function.Consumer;
 

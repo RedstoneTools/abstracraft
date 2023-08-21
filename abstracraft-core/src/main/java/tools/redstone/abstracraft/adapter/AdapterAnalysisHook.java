@@ -5,13 +5,11 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.util.TraceClassVisitor;
 import tools.redstone.abstracraft.AbstractionManager;
 import tools.redstone.abstracraft.analysis.*;
-import tools.redstone.abstracraft.util.ASMUtil;
-import tools.redstone.abstracraft.util.MethodWriter;
+import tools.redstone.abstracraft.util.asm.ASMUtil;
+import tools.redstone.abstracraft.util.asm.MethodWriter;
 
-import java.io.PrintWriter;
 import java.util.function.Function;
 
 public class AdapterAnalysisHook implements ClassAnalysisHook {
@@ -132,6 +130,8 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                         v.visitMethodInsn(Opcodes.INVOKEINTERFACE, NAME_Function, "apply", "(Ljava/lang/Object;)Ljava/lang/Object;", true);
                     });
 
+                    context.currentComputeStack().push(new Object());
+
                     return true;
                 }
 
@@ -143,8 +143,10 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
             public boolean visitVarInsn(AnalysisContext ctx, int opcode, int varIndex, Type type, String signature) {
                 if (opcode == Opcodes.ASTORE && ctx.currentComputeStack().peek() instanceof TrackedReturnValue rv) {
                     ctx.currentComputeStack().pop();
+                    ctx.currentComputeStack().push(new ClassDependencyAnalyzer.FromVar(varIndex, type, signature));
 
                     rv.dstType = signature;
+                    return true;
                 }
 
                 return false;
@@ -152,10 +154,13 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
 
             @Override
             public boolean visitFieldInsn(AnalysisContext ctx, int opcode, ReferenceInfo fieldInfo) {
-                if (opcode == Opcodes.PUTFIELD && ctx.currentComputeStack().peek() instanceof TrackedReturnValue rv) {
+                if ((opcode == Opcodes.PUTFIELD || opcode == Opcodes.PUTSTATIC) &&
+                        ctx.currentComputeStack().peek() instanceof TrackedReturnValue rv) {
+                    if (opcode == Opcodes.PUTFIELD) ctx.currentComputeStack().pop();
                     ctx.currentComputeStack().pop();
 
                     rv.dstType = fieldInfo.signature() == null ? fieldInfo.desc() : fieldInfo.signature();
+                    return true;
                 }
 
                 return false;
@@ -167,6 +172,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                     ctx.currentComputeStack().pop();
 
                     rv.dstType = ctx.currentMethod().type().getReturnType().getDescriptor();
+                    return true;
                 }
 
                 return false;
@@ -176,8 +182,10 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
             public boolean visitTypeInsn(AnalysisContext ctx, int opcode, Type type) {
                 if (opcode == Opcodes.CHECKCAST && !ctx.currentComputeStack().isEmpty() && ctx.currentComputeStack().peek() instanceof TrackedReturnValue rv) {
                     ctx.currentComputeStack().pop();
+                    ctx.currentComputeStack().push(new ClassDependencyAnalyzer.InstanceOf(type));
 
                     rv.dstType = type.getDescriptor();
+                    return true;
                 }
 
                 return false;
