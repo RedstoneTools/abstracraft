@@ -633,7 +633,7 @@ public class ClassDependencyAnalyzer {
 
                 // post-analyze all methods
                 for (MethodNode methodNode : classNode.methods) {
-                    ReferenceAnalysis analysis = getReferenceAnalysis(ReferenceInfo.forMethodInfo(internalName, methodNode.name, methodNode.desc, Modifier.isStatic(methodNode.access)));
+                    ReferenceAnalysis analysis = publicReference(postAnalyzeCtx, ReferenceInfo.forMethodInfo(internalName, methodNode.name, methodNode.desc, Modifier.isStatic(methodNode.access)));
                     if (analysis.optionalReferenceNumber < 0 || abstractionManager.getRequiredMethodPredicate().test(analysis)) {
                         analysis.referenceRequired(postAnalyzeCtx);
                     }
@@ -671,9 +671,6 @@ public class ClassDependencyAnalyzer {
 
                 // mark complete
                 classAnalysis.completed = true;
-
-                if (classNode.name.endsWith("AImpl"))
-                    classNode.accept(new TraceClassVisitor(new PrintWriter(System.out)));
             }
         });
 

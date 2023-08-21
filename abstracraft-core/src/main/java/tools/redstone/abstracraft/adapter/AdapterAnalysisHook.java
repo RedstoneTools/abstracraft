@@ -1,7 +1,9 @@
 package tools.redstone.abstracraft.adapter;
 
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.util.TraceClassVisitor;
 import tools.redstone.abstracraft.AbstractionManager;
@@ -51,6 +53,13 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                     Object srcValue = context.currentComputeStack().pop();
                     String srcType = ((ClassDependencyAnalyzer.StackValue)srcValue).signature();
 
+                    // load the src class
+                    Type srcAsmType = Type.getType(srcType);
+                    if (srcAsmType.getSort() == Type.OBJECT)
+                        context.abstractionManager().findClass(srcAsmType.getClassName());
+                    if (srcAsmType.getSort() == Type.METHOD)
+                        srcType = srcAsmType.getReturnType().toString();
+
                     // push tracked return value
                     var trackedReturnValue = new TrackedReturnValue(new ClassDependencyAnalyzer.ReturnValue(info, TYPE_Object, TYPE_Object.toString()));
                     context.currentComputeStack().push(trackedReturnValue);
@@ -61,31 +70,35 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                             // create static field
                             .visitField(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, fieldName, TYPE_Function.getDescriptor(), TYPE_Function.getDescriptor(), null /* set in static initializer */);
 
-                    // potentially modify <clinit>
-                    writer.addInsn(v -> {
-                        String dstType = trackedReturnValue.dstType;
-                        if (dstType == null)
-                            return;
-
-                        // modify <cinit>
-                        var mCInit = ASMUtil.findMethod(currAnalysis.classNode(), "<clinit>", "()V");
-                        boolean created = false;
-                        if (mCInit == null) {
-                            mCInit = (MethodNode) currAnalysis.classNode().visitMethod(Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC, "<clinit>", "()V", "()V", new String[] { });
-                            created = true;
-                        }
-
+                    // modify <cinit>
+                    var mCInit = ASMUtil.findMethod(currAnalysis.classNode(), "<clinit>", "()V");
+                    boolean created = false;
+                    if (mCInit == null) {
+                        mCInit = (MethodNode) currAnalysis.classNode().visitMethod(Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC, "<clinit>", "()V", "()V", new String[] { });
+                        created = true;
                         mCInit.visitCode();
+                    }
 
-                        mCInit.visitMethodInsn(Opcodes.INVOKESTATIC, TYPE_AdapterRegistry.getInternalName(), "getInstance", "()L" + TYPE_AdapterRegistry.getInternalName() + ";", false);
-                        mCInit.visitLdcInsn(srcType);
-                        mCInit.visitLdcInsn(dstType);
-                        mCInit.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TYPE_AdapterRegistry.getInternalName(), "lazyRequireMonoDirectional", "(Ljava/lang/String;Ljava/lang/String;)" + TYPE_Function.getDescriptor(), false);
-                        mCInit.visitFieldInsn(Opcodes.PUTSTATIC, currMethod.internalClassName(), fieldName, TYPE_Function.getDescriptor());
-                        if (created) mCInit.visitInsn(Opcodes.RETURN);
+                    boolean finalCreated = created;
+                    String finalSrcType = srcType;
+                    var clinitInsn = new InsnNode(-1) {
+                        @Override
+                        public void accept(MethodVisitor v) {
+                            String dstType = trackedReturnValue.dstType;
+                            if (dstType == null)
+                                return;
 
-                        mCInit.visitEnd();
-                    });
+                            v.visitMethodInsn(Opcodes.INVOKESTATIC, TYPE_AdapterRegistry.getInternalName(), "getInstance", "()L" + TYPE_AdapterRegistry.getInternalName() + ";", false);
+                            v.visitLdcInsn(finalSrcType);
+                            v.visitLdcInsn(dstType);
+                            v.visitMethodInsn(Opcodes.INVOKEVIRTUAL, TYPE_AdapterRegistry.getInternalName(), "lazyRequireMonoDirectional", "(Ljava/lang/String;Ljava/lang/String;)" + TYPE_Function.getDescriptor(), false);
+                            v.visitFieldInsn(Opcodes.PUTSTATIC, currMethod.internalClassName(), fieldName, TYPE_Function.getDescriptor());
+                            if (finalCreated) v.visitInsn(Opcodes.RETURN);
+                        }
+                    };
+
+                    if (mCInit.instructions.size() != 0) mCInit.instructions.insertBefore(mCInit.instructions.getFirst(), clinitInsn);
+                    else mCInit.instructions.add(clinitInsn);
 
                     // replace instruction
                     writer.addInsn(v -> {
@@ -93,11 +106,16 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                         // the dst type still has not been determined we throw an error
                         String dstType = trackedReturnValue.dstType;
                         if (dstType == null)
-                            throw new IllegalStateException("Could not determine dst type for `adapt(value)` call in " + currMethod + " with src type `" + srcType + "`");
+                            throw new IllegalStateException("Could not determine dst type for `adapt(value)` call in " + currMethod + " with src type `" + finalSrcType + "`");
+
+                        // load the dst class
+                        Type dstAsmType = Type.getType(dstType);
+                        if (dstAsmType.getSort() == Type.OBJECT)
+                            context.abstractionManager().findClass(dstAsmType.getClassName());
 
                         // check if the adapter exists
-                        if (adapterRegistry.findMonoDirectional(srcType, dstType) == null)
-                            throw new IllegalStateException("No adapter found for src = " + srcType + ", dst = " + dstType + " in method " + currMethod);
+                        if (adapterRegistry.findMonoDirectional(finalSrcType, dstType) == null)
+                            throw new IllegalStateException("No adapter found for src = " + finalSrcType + ", dst = " + dstType + " in method " + currMethod);
 
                         // pop original instance variable after
                         if (!isStatic) {
@@ -107,8 +125,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                         }
 
                         // push adapter and swap
-                        v.visitVarInsn(Opcodes.ALOAD, 0);
-                        v.visitFieldInsn(Opcodes.GETFIELD, currMethod.internalClassName(), fieldName, TYPE_Function.getDescriptor());
+                        v.visitFieldInsn(Opcodes.GETSTATIC, currMethod.internalClassName(), fieldName, TYPE_Function.getDescriptor());
                         v.visitInsn(Opcodes.SWAP); // val - function
 
                         // make it call Function#apply

@@ -28,29 +28,30 @@ public class AbstractionManager {
 
     record DefaultImplAnalysis(Set<ReferenceInfo> unimplementedMethods) { }
 
-    Predicate<String> classAuditPredicate = s -> true;                                                                  // The predicate for abstraction class names.
+    Predicate<String> classAuditPredicate = s -> true;                                          // The predicate for abstraction class names.
     Predicate<ReferenceAnalysis> requiredMethodPredicate = m -> m.optionalReferenceNumber <= 0; // The predicate for required methods.
-    final List<ClassAnalysisHook> analysisHooks = new ArrayList<>();                                               // The global dependency analysis hooks
+    final List<ClassAnalysisHook> analysisHooks = new ArrayList<>();                            // The global dependency analysis hooks
 
-    final Map<Class<?>, Class<?>> implByBaseClass = new HashMap<>();                                                    // The registered implementation classes by base class
-    final Map<ReferenceInfo, Boolean> implementedCache = new HashMap<>();                                               // A cache to store whether a specific method is implemented for fast access
+    final Map<Class<?>, Class<?>> implByBaseClass = new HashMap<>();                            // The registered implementation classes by base class
+    final Map<ReferenceInfo, Boolean> implementedCache = new HashMap<>();                       // A cache to store whether a specific method is implemented for fast access
+    final Set<Class<?>> registeredImplClasses = new HashSet<>();                                // Set of all classes registerImpl() was called with
 
     final Map<ReferenceInfo, ReferenceAnalysis> refAnalysisMap = new HashMap<>();               // All analyzed methods by their descriptor
-    final Map<String, ClassDependencyAnalyzer> analyzerMap = new HashMap<>();                                           // All analyzers by class name
+    final Map<String, ClassDependencyAnalyzer> analyzerMap = new HashMap<>();                   // All analyzers by class name
     final ClassLoader transformingClassLoader;
 
-    final ClassDependencyAnalyzer partialAnalyzer;
+    final ClassDependencyAnalyzer partialAnalyzer;                                              // Class analyzer used to initiate partial analysis
 
     public AbstractionManager() {
         // create class loader
         this.transformingClassLoader = ReflectUtil.transformingClassLoader(
                 // name predicate
-                name -> !name.startsWith("java") && classAuditPredicate.test(name),
+                this::shouldTransformClass,
                 // parent class loader
                 getClass().getClassLoader(),
                 // transformer
                 ((name, reader, writer) -> {
-                    System.out.println("LOADER DEBUG loading class(" + name + ")");
+//                    System.out.println("LOADER DEBUG loading class(" + name + ")");
                     long t1 = System.currentTimeMillis();
 
                     var analyzer = analyzer(name, true);
@@ -60,7 +61,13 @@ public class AbstractionManager {
 
                     long t2 = System.currentTimeMillis();
 //                    System.out.println("LOADER DEBUG transforming class took " + (t2 - t1) + "ms");
-                }), ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, false);
+                }), ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, false,
+                klass -> {
+                    // call class load hooks
+                    for (var hook : analysisHooks) {
+                        hook.onClassLoad(this, klass);
+                    }
+                });
 
         this.partialAnalyzer = new ClassDependencyAnalyzer(this, null);
     }
@@ -109,6 +116,11 @@ public class AbstractionManager {
             return List.of();
         }
 
+        if (current == startClass)
+            // an interface, but not an abstraction class,
+            // be lenient and return an empty list
+            return List.of();
+
         if (current == null)
             throw new IllegalArgumentException("Could not find base abstraction for " + startClass);
         return List.of(current);
@@ -120,9 +132,25 @@ public class AbstractionManager {
      * @param implClass The implementation.
      */
     public void registerImpl(Class<?> implClass) {
-        for (Class<?> kl : getApplicableAbstractionClasses(implClass)) {
+        if (registeredImplClasses.contains(implClass))
+            return;
+
+        var abstractionsImplemented = getApplicableAbstractionClasses(implClass);
+        for (Class<?> kl : abstractionsImplemented) {
             implByBaseClass.put(kl, implClass);
         }
+
+        registeredImplClasses.add(implClass);
+    }
+
+    /**
+     * Loads and registers the class by the given name.
+     *
+     * @param implClassName The class name.
+     */
+    public void loadAndRegisterImpl(String implClassName) {
+        final Class<?> klass = findClass(implClassName);
+        registerImpl(klass);
     }
 
     /**
@@ -365,6 +393,13 @@ public class AbstractionManager {
         return analyzer.getClassAnalysis();
     }
 
+    /**
+     * Register the given analysis hook to this abstraction
+     * manager and the partial analyzer.
+     *
+     * @param hook The hook.
+     * @return This.
+     */
     public AbstractionManager addAnalysisHook(ClassAnalysisHook hook) {
         this.analysisHooks.add(hook);
         this.partialAnalyzer.addHook(hook);
@@ -372,6 +407,12 @@ public class AbstractionManager {
         return this;
     }
 
+    /**
+     * Iterate over all given resources and try to load
+     * and register them as impl classes.
+     *
+     * @param stream The resources.
+     */
     public void registerImplsFromResources(Stream<PackageWalker.Resource> stream) {
         stream.forEach(resource -> {
             Class<?> klass = findClass(resource.publicPath());
@@ -379,6 +420,13 @@ public class AbstractionManager {
         });
     }
 
+    /**
+     * Check whether a class by the given name should be transformed
+     * by this abstraction manager.
+     *
+     * @param name The name.
+     * @return Whether it should be transformed.
+     */
     public boolean shouldTransformClass(String name) {
         return !name.startsWith("java") && classAuditPredicate.test(name);
     }
@@ -555,6 +603,16 @@ public class AbstractionManager {
 
                 // check field set
                 return field.get(null) != null;
+            }
+        };
+    }
+
+    /** Automatically register impl classes when loaded by this manager */
+    public static ClassAnalysisHook autoRegisterLoadedImplClasses() {
+        return new ClassAnalysisHook() {
+            @Override
+            public void onClassLoad(AbstractionManager manager, Class<?> klass) {
+                manager.registerImpl(klass);
             }
         };
     }

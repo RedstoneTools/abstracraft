@@ -42,6 +42,7 @@ public class Abstracraft {
             .addAnalysisHook(AbstractionManager.checkDependenciesForInterface(Abstraction.class, true))
             .addAnalysisHook(AbstractionManager.checkStaticFieldsNotNull())
             .addAnalysisHook(AbstractionManager.checkForExplicitImplementation(Abstraction.class))
+            .addAnalysisHook(AbstractionManager.autoRegisterLoadedImplClasses())
             .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, getAdapterRegistry()));
 
     // The packages to find implementation classes to

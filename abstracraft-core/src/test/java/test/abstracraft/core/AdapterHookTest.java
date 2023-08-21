@@ -1,10 +1,12 @@
 package test.abstracraft.core;
 
 import org.junit.jupiter.api.Assertions;
+import tools.redstone.abstracraft.AbstractionManager;
 import tools.redstone.abstracraft.HandleAbstraction;
 import tools.redstone.abstracraft.adapter.Adapter;
 import tools.redstone.abstracraft.adapter.AdapterRegistry;
 import tools.redstone.abstracraft.usage.Abstraction;
+import tools.redstone.abstracraft.util.PackageWalker;
 
 public class AdapterHookTest {
 
@@ -40,7 +42,8 @@ public class AdapterHookTest {
     }
 
     static class test_AdapterHooks {
-        void run() {
+        void run(AbstractionManager mgr) {
+            /* test code */
             A a = new AImpl(new InternalA());
             B b = a.getB();
 
@@ -48,14 +51,16 @@ public class AdapterHookTest {
         }
     }
 
-    @TestSystem.Test
-    void test_AdapterHooks(TestSystem.TestInterface itf) {
+    {
         // setup adapters
-        AdapterRegistry.getInstance().register(Adapter.handle(A.class, InternalA.class));
-        AdapterRegistry.getInstance().register(Adapter.handle(B.class, InternalB.class));
+        AdapterRegistry.getInstance().register(Adapter.handle(InternalA.class, A.class));
+        AdapterRegistry.getInstance().register(Adapter.handle(InternalB.class, B.class));
+    }
 
+    @TestSystem.Test(globalAbstractionManager = true, autoRegisterImpls = true)
+    void test_AdapterHooks(TestSystem.TestInterface itf) {
         // execute run
-        itf.runTransformed("run");
+        itf.runTransformed("run", itf.abstractionManager());
     }
 
 }

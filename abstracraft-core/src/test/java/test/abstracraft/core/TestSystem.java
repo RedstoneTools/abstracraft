@@ -11,6 +11,7 @@ import tools.redstone.abstracraft.analysis.ClassAnalysisHook;
 import tools.redstone.abstracraft.analysis.ReferenceDependency;
 import tools.redstone.abstracraft.analysis.RequireOneDependency;
 import tools.redstone.abstracraft.usage.Abstraction;
+import tools.redstone.abstracraft.util.PackageWalker;
 import tools.redstone.abstracraft.util.ReflectUtil;
 
 import java.lang.annotation.ElementType;
@@ -105,6 +106,7 @@ public class TestSystem {
         String abstractionImpl() default "";
         String[] hooks() default {};
         boolean fieldDependencies() default true;
+        boolean autoRegisterImpls() default false;
     }
 
     // System.out.println
@@ -137,13 +139,14 @@ public class TestSystem {
                         getGlobalAbstractionManager() :
                         // create new abstraction manager
                         new AbstractionManager()
-                        .setClassAuditPredicate(name -> name.startsWith(klass.getName()))
-                        .setRequiredMethodPredicate(m -> m.ref.name().startsWith("test"))
-                        .addAnalysisHook(AbstractionManager.excludeCallsOnSelfAsDependencies())
-                        .addAnalysisHook(AbstractionManager.checkDependenciesForInterface(Abstraction.class, testAnnotation.fieldDependencies()))
-                        .addAnalysisHook(AbstractionManager.checkForExplicitImplementation(Abstraction.class))
-                        .addAnalysisHook(AbstractionManager.checkStaticFieldsNotNull())
-                        .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, AdapterRegistry.getInstance()));
+                                .setClassAuditPredicate(name -> name.startsWith(klass.getName()))
+                                .setRequiredMethodPredicate(m -> m.ref.name().startsWith("test"))
+                                .addAnalysisHook(AbstractionManager.excludeCallsOnSelfAsDependencies())
+                                .addAnalysisHook(AbstractionManager.checkDependenciesForInterface(Abstraction.class, testAnnotation.fieldDependencies()))
+                                .addAnalysisHook(AbstractionManager.checkForExplicitImplementation(Abstraction.class))
+                                .addAnalysisHook(AbstractionManager.checkStaticFieldsNotNull())
+                                .addAnalysisHook(AbstractionManager.autoRegisterLoadedImplClasses())
+                                .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, AdapterRegistry.getInstance()));
 
                 // get test name
                 final String testName = method.getName();
@@ -179,6 +182,15 @@ public class TestSystem {
                         System.out.println("DEBUG Test " + testName + ": Found abstraction impl " + implClass);
                     abstractionManager.registerImpl(implClass);
                     implInstance = implClass.getConstructor().newInstance();
+                }
+
+                // auto register impls
+                if (testAnnotation.autoRegisterImpls()) {
+                    abstractionManager.registerImplsFromResources(
+                            new PackageWalker(klass, klass.getPackageName())
+                                .findResources()
+                                .filter(r -> r.name().startsWith(klass.getSimpleName() + "$"))
+                                .filter(r -> r.trimmedName().endsWith("Impl")));
                 }
 
                 long t2 = System.currentTimeMillis();

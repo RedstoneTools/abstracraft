@@ -78,6 +78,8 @@ public interface Adapter<A, B> {
                 public A toB(H val) {
                     if (implClass == null) {
                         implClass = Abstracraft.getInstance().getImplementationClass(abstractionClass);
+                        if (implClass == null)
+                            throw new RuntimeException("Could not find impl class for " + abstractionClass);
                     }
 
                     try {

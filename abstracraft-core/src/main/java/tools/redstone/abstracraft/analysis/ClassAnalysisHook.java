@@ -37,6 +37,10 @@ public interface ClassAnalysisHook {
     // When this hook is registered to the given manager
     default void onRegister(AbstractionManager manager) { }
 
+    // When a class is newly loaded through the abstraction manager's
+    // transforming class loader.
+    default void onClassLoad(AbstractionManager manager, Class<?> klass) { }
+
     // When a method is referenced in a required block
     default ReferenceHook requiredReference(AnalysisContext context, ReferenceAnalysis called) { return null; }
 

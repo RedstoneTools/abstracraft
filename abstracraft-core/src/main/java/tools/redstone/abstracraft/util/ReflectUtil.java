@@ -13,6 +13,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
@@ -222,14 +223,15 @@ public class ReflectUtil {
     public static ClassLoader transformingClassLoader(Predicate<String> namePredicate,
                                                       ClassTransformer transformer,
                                                       int writerFlags) {
-        return transformingClassLoader(namePredicate, ClassLoader.getSystemClassLoader(), transformer, writerFlags, false);
+        return transformingClassLoader(namePredicate, ClassLoader.getSystemClassLoader(), transformer, writerFlags, false, null);
     }
 
     public static ClassLoader transformingClassLoader(Predicate<String> namePredicate,
                                                       ClassLoader parent,
                                                       ClassTransformer transformer,
                                                       int writerFlags,
-                                                      boolean warnLoaded) {
+                                                      boolean warnLoaded,
+                                                      Consumer<Class<?>> postLoad) {
         // create class loader
         return new ClassLoader(parent) {
             @Override
@@ -263,12 +265,8 @@ public class ReflectUtil {
 
                         // define the class
                         klass = defineClass(name, bytes, 0, bytes.length);
-
-                        // register the class as loaded by all
-                        // class loaders in the parent chain
-                        for (ClassLoader current = this.getParent(); current != null; current = current.getParent()) {
-                            ClassLoader_addClass.invoke(current, klass);
-                        }
+                        if (postLoad != null)
+                            postLoad.accept(klass);
 
                         return klass;
                     }
