@@ -3,8 +3,7 @@ Abstracraft provides abstractions for Minecraft features powered by the `abstrac
 It provides a way to cleanly use abstractions which may change across versions
 without any runtime checks. Internally it utilizes bytecode analysis/transformation.
 
-The [`Usage`](https://github.com/RedstoneTools/abstracraft/blob/dev/abstracraft-core/src/main/java/tools/redstone/abstracraft/usage/Usage.java) 
-class provides the most important methods for usage of abstractions in your code.
+The [`Usage`](https://github.com/RedstoneTools/abstracraft/blob/dev/abstracraft-core/src/main/java/tools/redstone/abstracraft/usage/Usage.java) class provides the most important methods for usage of abstractions in your code.
 These methods here have extensive javadocs which you can always check for information.
 There are 3 important methods:
 - `boolean optionally(Runnable code)` - Executes the given block and returns true if the dependencies
