@@ -18,6 +18,8 @@ import java.util.function.Supplier;
  *
  * Reference the javadocs provided per method if you're unsure
  * about specific workings or usage.
+ *
+ * @author orbyfied
  */
 public class Usage {
 

@@ -13,6 +13,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
@@ -29,6 +30,7 @@ public class ReflectUtil {
     /* Method handles for cracking  */
     static final MethodHandle SETTER_Field_modifiers;
     static final MethodHandle ClassLoader_findLoadedClass;
+    static final MethodHandle ClassLoader_addClass;
     static final MethodHandles.Lookup INTERNAL_LOOKUP;
 
     static {
@@ -56,10 +58,15 @@ public class ReflectUtil {
 
             SETTER_Field_modifiers = INTERNAL_LOOKUP.findSetter(Field.class, "modifiers", Integer.TYPE);
             ClassLoader_findLoadedClass = INTERNAL_LOOKUP.findVirtual(ClassLoader.class, "findLoadedClass", MethodType.methodType(Class.class, String.class));
+            ClassLoader_addClass = INTERNAL_LOOKUP.findVirtual(ClassLoader.class, "addClass", MethodType.methodType(void.class, Class.class));
         } catch (Throwable t) {
             // throw exception in init
             throw new ExceptionInInitializerError(t);
         }
+    }
+
+    public static MethodHandles.Lookup getInternalLookup() {
+        return INTERNAL_LOOKUP;
     }
 
     public static Unsafe getUnsafe() {
@@ -172,7 +179,7 @@ public class ReflectUtil {
      * @param name The class name.
      * @return The loaded class or null if unloaded.
      */
-    public static Class<?> findLoadedClass(ClassLoader loader, String name) {
+    public static Class<?> findLoadedClassInParents(ClassLoader loader, String name) {
         try {
             while (loader != null) {
                 Class<?> klass = (Class<?>) ClassLoader_findLoadedClass.invoke(loader, name);
@@ -190,23 +197,41 @@ public class ReflectUtil {
         }
     }
 
+    public static Class<?> findLoadedClass(ClassLoader loader, String name) {
+        try {
+            return (Class<?>) ClassLoader_findLoadedClass.invoke(loader, name);
+        } catch (Throwable t) {
+            t.printStackTrace();
+            return null;
+        }
+    }
+
     /** Black hole for class objects */
     public static boolean ensureLoaded(Class<?> klass) {
         if (klass == null) return false;
         return klass.hashCode() != 0;
     }
 
+    public static ClassLoader rootClassLoader(ClassLoader loader) {
+        while (loader.getParent() != null) {
+            loader = loader.getParent();
+        }
+
+        return loader;
+    }
+
     public static ClassLoader transformingClassLoader(Predicate<String> namePredicate,
                                                       ClassTransformer transformer,
                                                       int writerFlags) {
-        return transformingClassLoader(namePredicate, ClassLoader.getSystemClassLoader(), transformer, writerFlags, false);
+        return transformingClassLoader(namePredicate, ClassLoader.getSystemClassLoader(), transformer, writerFlags, false, null);
     }
 
     public static ClassLoader transformingClassLoader(Predicate<String> namePredicate,
                                                       ClassLoader parent,
                                                       ClassTransformer transformer,
                                                       int writerFlags,
-                                                      boolean warnLoaded) {
+                                                      boolean warnLoaded,
+                                                      Consumer<Class<?>> postLoad) {
         // create class loader
         return new ClassLoader(parent) {
             @Override
@@ -215,7 +240,7 @@ public class ReflectUtil {
                     return super.loadClass(name);
                 }
 
-                Class<?> klass = ReflectUtil.findLoadedClass(this, name);
+                Class<?> klass = ReflectUtil.findLoadedClassInParents(this, name);
                 if (klass != null) {
                     if (warnLoaded && klass.getClassLoader() != this) {
                         System.out.println("WARNING Found loaded class " + name + " in loader " + klass.getClassLoader());
@@ -238,10 +263,15 @@ public class ReflectUtil {
                         transformer.transform(name, reader, writer);
                         bytes = writer.toByteArray();
 
-                        return defineClass(name, bytes, 0, bytes.length);
+                        // define the class
+                        klass = defineClass(name, bytes, 0, bytes.length);
+                        if (postLoad != null)
+                            postLoad.accept(klass);
+
+                        return klass;
                     }
-                } catch (Exception e) {
-                    throw new RuntimeException("While loading class " + name, e);
+                } catch (Throwable t) {
+                    throw new RuntimeException("While loading class " + name, t);
                 }
             }
 

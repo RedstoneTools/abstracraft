@@ -12,4 +12,19 @@ public interface Abstraction {
         throw new NotImplementedException(null);
     }
 
+    /**
+     * Uses the appropriate adapter if present registered in
+     * {@link tools.redstone.abstracraft.adapter.AdapterRegistry} to
+     * convert the given value to a value of type T.
+     *
+     * This should never be called at runtime.
+     * This directive should be replaced by the bytecode analyzer/transformer.
+     *
+     * @param val The value to transform.
+     * @param <T> The output value type.
+     * @throws UnsupportedOperationException If there is no adapter for val -> T
+     * @return The mapped/adapted value.
+     */
+    default <T> T adapt(Object val) { throw new AssertionError(); }
+
 }

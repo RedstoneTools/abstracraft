@@ -1,12 +1,11 @@
 package tools.redstone.abstracraft.analysis;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import org.objectweb.asm.tree.ClassNode;
+
+import java.util.*;
 import java.util.function.Supplier;
 
-import static tools.redstone.abstracraft.util.CollectionUtil.addIfNotNull;
+import static tools.redstone.abstracraft.util.data.CollectionUtil.addIfNotNull;
 
 /**
  * Stores data about a reference. If not partial, this will also include
@@ -17,12 +16,13 @@ public class ReferenceAnalysis {
     public final ReferenceInfo ref;                                           // The reference this analysis covers
     public List<ReferenceInfo> requiredDependencies = new ArrayList<>();      // All recorded required dependencies used by this method
     public int optionalReferenceNumber = 0;                                   // Whether this method is referenced in an optionally() block
-    public List<ReferenceAnalysis> allAnalyzedReferences = new ArrayList<>(); // The analysis objects of all methods/fields normally called by this method
+    public Set<ReferenceAnalysis> allAnalyzedReferences = new HashSet<>();    // The analysis objects of all methods/fields normally called by this method
     public boolean complete = false;                                          // Whether this analysis has completed all mandatory tasks
     public boolean partial = false;                                           // Whether this analysis is used purely to store meta or if it is actually analyzed with bytecode analysis
-    public final boolean field;
+    public final boolean field;                                               // Whether this references a field
+    private Map<Object, Object> extra;                                        // Extra data which can be used by hooks
 
-    public List<DependencyAnalysisHook.ReferenceHook> refHooks = new ArrayList<>();
+    public List<ClassAnalysisHook.ReferenceHook> refHooks = new ArrayList<>();
 
     public ReferenceAnalysis(ClassDependencyAnalyzer analyzer, ReferenceInfo ref) {
         this.analyzer = analyzer;
@@ -30,8 +30,42 @@ public class ReferenceAnalysis {
         this.field = ref.isField();
     }
 
+    public ClassNode classNode() {
+        return analyzer.getClassNode();
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T get(Object key) {
+        if (extra == null)
+            return null;
+        return (T) extra.get(key);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T get(Object key, Object def) {
+        if (extra == null)
+            return null;
+        return (T) extra.getOrDefault(key, def);
+    }
+
+    public boolean has(Object key) {
+        if (extra == null)
+            return false;
+        return extra.containsKey(key);
+    }
+
+    public void set(Object key, Object val) {
+        if (extra == null)
+            extra = new HashMap<>();
+        extra.put(key, val);
+    }
+
+    public Map<Object, Object> extra() {
+        return Collections.unmodifiableMap(extra);
+    }
+
     // Checked refHooks.add
-    private void addRefHook(DependencyAnalysisHook hook, Supplier<DependencyAnalysisHook.ReferenceHook> supplier) {
+    private void addRefHook(ClassAnalysisHook hook, Supplier<ClassAnalysisHook.ReferenceHook> supplier) {
         // create new ref hook
         addIfNotNull(refHooks, supplier.get());
     }

@@ -1,7 +1,9 @@
 package tools.redstone.abstracraft.analysis;
 
-import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionProvider;
+import tools.redstone.abstracraft.util.data.ExStack;
 
+import java.io.PrintStream;
 import java.util.Stack;
 
 public class AnalysisContext {
@@ -9,7 +11,7 @@ public class AnalysisContext {
     /**
      * The abstraction manager.
      */
-    private final AbstractionManager abstractionManager;
+    private final AbstractionProvider abstractionProvider;
 
     /**
      * The trace of the methods being analyzed.
@@ -17,10 +19,10 @@ public class AnalysisContext {
     public final Stack<ReferenceInfo> analysisStack = new Stack<>();
 
     // The current compute stacks from the methods.
-    final Stack<Stack<Object>> computeStacks = new Stack<>();
+    final Stack<ExStack<Object>> computeStacks = new Stack<>();
 
-    public AnalysisContext(AbstractionManager abstractionManager) {
-        this.abstractionManager = abstractionManager;
+    public AnalysisContext(AbstractionProvider abstractionProvider) {
+        this.abstractionProvider = abstractionProvider;
     }
 
     // Leaves a method and updates the context to account for it
@@ -30,12 +32,21 @@ public class AnalysisContext {
     }
 
     // Updates the context when entering a method, assumes shits already on the stacks.
-    void enteredMethod() {
-
+    void enteredMethod(ReferenceInfo info,
+                       ExStack<Object> computeStack) {
+        analysisStack.push(info);
+        computeStacks.push(computeStack);
     }
 
-    public AbstractionManager abstractionManager() {
-        return abstractionManager;
+    void printAnalysisTrace(PrintStream stream) {
+        for (int i = analysisStack.size() - 1; i >= 0; i--) {
+            var ref = analysisStack.get(i);
+            stream.println(" " + (i == analysisStack.size() - 1 ? "-> " : " - ") + ref);
+        }
+    }
+
+    public AbstractionProvider abstractionProvider() {
+        return abstractionProvider;
     }
 
     public ReferenceInfo currentMethod() {
@@ -48,15 +59,22 @@ public class AnalysisContext {
         var curr = currentMethod();
         if (curr == null)
             return null;
-        return abstractionManager.getMethodAnalysis(curr);
+        return abstractionProvider.getReferenceAnalysis(curr);
     }
 
-    /** Gets a CLONE of the current compute stack */
-    @SuppressWarnings("unchecked")
-    public Stack<Object> currentComputeStack() {
+    /** Gets the current compute stack */
+    public ExStack<Object> currentComputeStack() {
         if (computeStacks.isEmpty())
             return null;
-        return (Stack<Object>) computeStacks.peek().clone();
+        return computeStacks.peek();
+    }
+
+    /** Get a clone of the current compute stack */
+    @SuppressWarnings("unchecked")
+    public ExStack<Object> cloneComputeStack() {
+        try {
+            return (ExStack<Object>) currentComputeStack().clone();
+        } catch (Exception e) { throw new RuntimeException(e); }
     }
 
 }

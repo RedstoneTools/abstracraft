@@ -1,7 +1,7 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "tools.redstone.abstracraft.entity.mixin",
+  "package": "tools.redstone.abstracraft.impl.mixin",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
   ],

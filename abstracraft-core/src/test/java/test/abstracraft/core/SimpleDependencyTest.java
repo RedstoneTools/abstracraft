@@ -2,7 +2,7 @@ package test.abstracraft.core;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
-import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionProvider;
 import tools.redstone.abstracraft.analysis.ReferenceInfo;
 import tools.redstone.abstracraft.usage.Abstraction;
 import tools.redstone.abstracraft.usage.NoneImplementedException;
@@ -99,7 +99,7 @@ public class SimpleDependencyTest {
     }
 
     @TestSystem.Test(testClass = "TestClass", abstractionImpl = "AbcImpl")
-    void test_Unimplemented(Tests testInstance, AbstractionManager abstractionManager, Abc abc) throws Throwable {
+    void test_Unimplemented(Tests testInstance, AbstractionProvider abstractionManager, Abc abc) throws Throwable {
         Assertions.assertTrue(abstractionManager.isImplemented(ReferenceInfo.forMethodInfo(Abc.class, "d", false, String.class)));
         Assertions.assertTrue(abstractionManager.isImplemented(ReferenceInfo.forMethodInfo(Abc.class, "a", false, String.class)));
         Assertions.assertFalse(abstractionManager.isImplemented(ReferenceInfo.forMethodInfo(Abc.class, "c", false, String.class)));
