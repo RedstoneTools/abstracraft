@@ -1,6 +1,7 @@
 package tools.redstone.abstracraft.analysis;
 
 import org.objectweb.asm.Type;
+import tools.redstone.abstracraft.AbstractionProvider;
 import tools.redstone.abstracraft.util.asm.ASMUtil;
 
 import java.lang.reflect.Method;
@@ -76,7 +77,7 @@ public class ReferenceInfo {
 
     /**
      * Returns the reference info object which is always determined
-     * to be unimplemented by the {@link tools.redstone.abstracraft.AbstractionManager}.
+     * to be unimplemented by the {@link AbstractionProvider}.
      *
      * @return The unimplemented reference.
      */

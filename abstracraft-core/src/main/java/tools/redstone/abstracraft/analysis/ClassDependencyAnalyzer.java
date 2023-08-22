@@ -4,7 +4,7 @@ import org.objectweb.asm.*;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
-import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionProvider;
 import tools.redstone.abstracraft.usage.NotImplementedException;
 import tools.redstone.abstracraft.usage.Usage;
 import tools.redstone.abstracraft.util.asm.ASMUtil;
@@ -35,9 +35,9 @@ public class ClassDependencyAnalyzer {
         public List<Dependency> dependencies = new ArrayList<>();                             // All dependencies recorded in this class
 
         // Check whether all direct and switch dependencies are implemented
-        public boolean areAllImplemented(AbstractionManager abstractionManager) {
+        public boolean areAllImplemented(AbstractionProvider abstractionProvider) {
             for (Dependency dep : dependencies)
-                if (!dep.isImplemented(abstractionManager))
+                if (!dep.isImplemented(abstractionProvider))
                     return false;
             return true;
         }
@@ -62,7 +62,7 @@ public class ClassDependencyAnalyzer {
     static final Type TYPE_MethodInfo = Type.getType(ReferenceInfo.class);
     static final String NAME_MethodInfo = TYPE_MethodInfo.getInternalName();
 
-    private final AbstractionManager abstractionManager;                  // The abstraction manager
+    private final AbstractionProvider abstractionProvider;                  // The abstraction manager
     private String internalName;                                          // The internal name of this class
     private String className;                                             // The public name of this class
     private ClassReader classReader;                                      // The class reader for the bytecode
@@ -76,9 +76,9 @@ public class ClassDependencyAnalyzer {
         return this;
     }
 
-    public ClassDependencyAnalyzer(AbstractionManager manager,
+    public ClassDependencyAnalyzer(AbstractionProvider manager,
                                    ClassReader classReader) {
-        this.abstractionManager = manager;
+        this.abstractionProvider = manager;
         if (classReader != null) {
             this.internalName = classReader.getClassName();
             this.className = internalName.replace('/', '.');
@@ -110,7 +110,7 @@ public class ClassDependencyAnalyzer {
 
     /** Get a method analysis if present */
     public ReferenceAnalysis getReferenceAnalysis(ReferenceInfo info) {
-        return abstractionManager.getReferenceAnalysis(info);
+        return abstractionProvider.getReferenceAnalysis(info);
     }
 
     /** Analyzes and transforms a local method */
@@ -135,7 +135,7 @@ public class ClassDependencyAnalyzer {
             if (m == null) {
                 // return partial
                 // todo: try to find in super class or smth
-                return abstractionManager.makePartial(info);
+                return abstractionProvider.makePartial(info);
             }
 
             // create analysis, visit method and register result
@@ -154,7 +154,7 @@ public class ClassDependencyAnalyzer {
         // check for local method
         if (info.internalClassName().equals(this.internalName) && !info.isField())
             return localMethod(context, info);
-        return abstractionManager.publicReference(context, info);
+        return abstractionProvider.publicReference(context, info);
     }
 
     /** Check whether the given reference could be a dependency */
@@ -184,7 +184,7 @@ public class ClassDependencyAnalyzer {
             throw new IllegalArgumentException("No local method by " + currentMethodInfo + " in class " + internalName);
         }
 
-        abstractionManager.registerAnalysis(currentMethodAnalysis);
+        abstractionProvider.registerAnalysis(currentMethodAnalysis);
         classAnalysis.analyzedMethods.put(currentMethodInfo, currentMethodAnalysis);
 
         // Tries to estimate/track the current compute stack
@@ -289,7 +289,7 @@ public class ClassDependencyAnalyzer {
                     }
 
                     // discard lambda if the dependencies arent fulfilled
-                    boolean allImplemented = abstractionManager.areAllImplemented(dependencies);
+                    boolean allImplemented = abstractionProvider.areAllImplemented(dependencies);
                     if (!allImplemented) {
                         if (!lambda.direct()) {
                             analysis.optionalReferenceDropped(context);
@@ -358,7 +358,7 @@ public class ClassDependencyAnalyzer {
                                 analysis.requiredDependencies;
 
                         // if not implemented, add as optional dependencies
-                        if (!abstractionManager.areAllImplemented(dependencies) || chosen != null) {
+                        if (!abstractionProvider.areAllImplemented(dependencies) || chosen != null) {
                             CollectionUtil.mapImmediate(dependencies, dep -> new ReferenceDependency(true, dep, null), classAnalysis.dependencies, optionalDependencies);
                             lambda.discard.value = true;
                             continue;
@@ -413,7 +413,7 @@ public class ClassDependencyAnalyzer {
                     // is a block used by Usage.optionally
                     if (currentMethodAnalysis.optionalReferenceNumber <= 0) {
                         // insert runtime throw
-                        if (!abstractionManager.isImplemented(calledMethodInfo)) {
+                        if (!abstractionProvider.isImplemented(calledMethodInfo)) {
                             addInsn(new InsnNode(-1) {
                                 @Override
                                 public void accept(MethodVisitor mv) {
@@ -505,7 +505,7 @@ public class ClassDependencyAnalyzer {
                         // is a block used by Usage.optionally
                         if (currentMethodAnalysis.optionalReferenceNumber <= 0) {
                             // insert runtime throw
-                            if (!abstractionManager.isImplemented(fieldInfo)) {
+                            if (!abstractionProvider.isImplemented(fieldInfo)) {
                                 addInsn(new InsnNode(-1) {
                                     @Override
                                     public void accept(MethodVisitor mv) {
@@ -623,17 +623,17 @@ public class ClassDependencyAnalyzer {
                     return null;
 
                 // create analysis, visit method and register result
-                return methodVisitor(new AnalysisContext(abstractionManager), info, new ReferenceAnalysis(ClassDependencyAnalyzer.this, info), ASMUtil.findMethod(classNode, name, descriptor));
+                return methodVisitor(new AnalysisContext(abstractionProvider), info, new ReferenceAnalysis(ClassDependencyAnalyzer.this, info), ASMUtil.findMethod(classNode, name, descriptor));
             }
 
             @Override
             public void visitEnd() {
-                final AnalysisContext postAnalyzeCtx = new AnalysisContext(abstractionManager);
+                final AnalysisContext postAnalyzeCtx = new AnalysisContext(abstractionProvider);
 
                 // post-analyze all methods
                 for (MethodNode methodNode : classNode.methods) {
                     ReferenceAnalysis analysis = publicReference(postAnalyzeCtx, ReferenceInfo.forMethodInfo(internalName, methodNode.name, methodNode.desc, Modifier.isStatic(methodNode.access)));
-                    if (analysis.optionalReferenceNumber < 0 || abstractionManager.getRequiredMethodPredicate().test(analysis)) {
+                    if (analysis.optionalReferenceNumber < 0 || abstractionProvider.getRequiredMethodPredicate().test(analysis)) {
                         analysis.referenceRequired(postAnalyzeCtx);
                     }
 

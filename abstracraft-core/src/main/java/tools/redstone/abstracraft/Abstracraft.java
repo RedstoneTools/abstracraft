@@ -12,15 +12,18 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * Provides Abstracraft services like the {@link AbstractionManager} for the
+ * Provides Abstracraft services like the {@link AbstractionProvider} for the
  * rest of the Abstracraft project. This is so other modules can use local
- * {@link AbstractionManager}s if they want.
+ * {@link AbstractionProvider}s if they want.
+ *
+ * This is the only class which is actually specific to Abstracraft. The rest of
+ * the core is reusable in other projects.
  */
 public class Abstracraft {
 
     // Finds implementation classes as resources
     public interface ImplFinder {
-        Stream<PackageWalker.Resource> findResources(AbstractionManager manager);
+        Stream<PackageWalker.Resource> findResources(AbstractionProvider manager);
 
         static ImplFinder inPackage(Class<?> codeSrc, String pkg) {
             var walker = new PackageWalker(codeSrc, pkg);
@@ -37,12 +40,17 @@ public class Abstracraft {
     /**
      * The abstraction manager.
      */
-    private final AbstractionManager manager = new AbstractionManager()
-            .addAnalysisHook(AbstractionManager.excludeCallsOnSelfAsDependencies())
-            .addAnalysisHook(AbstractionManager.checkDependenciesForInterface(Abstraction.class, true))
-            .addAnalysisHook(AbstractionManager.checkStaticFieldsNotNull())
-            .addAnalysisHook(AbstractionManager.checkForExplicitImplementation(Abstraction.class))
-            .addAnalysisHook(AbstractionManager.autoRegisterLoadedImplClasses())
+    private final AbstractionManager manager = AbstractionManager.getInstance();
+
+    /**
+     * The abstraction provider.
+     */
+    private final AbstractionProvider provider = manager.createProvider()
+            .addAnalysisHook(AbstractionProvider.excludeCallsOnSelfAsDependencies())
+            .addAnalysisHook(AbstractionProvider.checkDependenciesForInterface(Abstraction.class, true))
+            .addAnalysisHook(AbstractionProvider.checkStaticFieldsNotNull())
+            .addAnalysisHook(AbstractionProvider.checkForExplicitImplementation(Abstraction.class))
+            .addAnalysisHook(AbstractionProvider.autoRegisterLoadedImplClasses())
             .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, getAdapterRegistry()));
 
     // The packages to find implementation classes to
@@ -53,8 +61,8 @@ public class Abstracraft {
         implFinders.add(ImplFinder.inPackage(Abstraction.class, ABSTRACRAFT_IMPLEMENTATION_PACKAGE));
     }
 
-    protected AbstractionManager getManager() {
-        return manager;
+    protected AbstractionProvider getProvider() {
+        return provider;
     }
 
     // The package under which all impls are located
@@ -79,7 +87,7 @@ public class Abstracraft {
      * @param hook The hook.
      */
     public void addAnalysisHook(ClassAnalysisHook hook) {
-        manager.addAnalysisHook(hook);
+        provider.addAnalysisHook(hook);
     }
 
     /**
@@ -97,7 +105,7 @@ public class Abstracraft {
      */
     public void findAndRegisterImplementations() {
         for (var finder : implFinders) {
-            manager.registerImplsFromResources(finder.findResources(manager));
+            provider.registerImplsFromResources(finder.findResources(provider));
         }
     }
 
@@ -109,7 +117,7 @@ public class Abstracraft {
      * @return The class.
      */
     public Class<?> getOrTransformClass(String name) {
-        return manager.findClass(name);
+        return provider.findClass(name);
     }
 
     @SuppressWarnings("unchecked")

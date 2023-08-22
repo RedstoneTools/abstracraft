@@ -1,7 +1,7 @@
 package test.abstracraft.core;
 
 import org.junit.jupiter.api.Assertions;
-import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionProvider;
 import tools.redstone.abstracraft.HandleAbstraction;
 import tools.redstone.abstracraft.adapter.Adapter;
 import tools.redstone.abstracraft.adapter.AdapterRegistry;
@@ -41,7 +41,7 @@ public class AdapterHookTest {
     }
 
     static class test_AdapterHooks {
-        void run(AbstractionManager mgr) {
+        void run(AbstractionProvider mgr) {
             /* test code */
             A a = new AImpl(new InternalA());
             B b = a.getB();

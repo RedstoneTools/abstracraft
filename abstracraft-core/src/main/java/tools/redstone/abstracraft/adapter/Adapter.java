@@ -1,6 +1,7 @@
 package tools.redstone.abstracraft.adapter;
 
 import tools.redstone.abstracraft.Abstracraft;
+import tools.redstone.abstracraft.AbstractionManager;
 import tools.redstone.abstracraft.HandleAbstraction;
 import tools.redstone.abstracraft.util.ReflectUtil;
 import tools.redstone.abstracraft.util.functional.ThrowingSupplier;
@@ -77,7 +78,7 @@ public interface Adapter<A, B> {
                 @Override
                 public A toB(H val) {
                     if (implClass == null) {
-                        implClass = Abstracraft.getInstance().getImplementationClass(abstractionClass);
+                        implClass = AbstractionManager.getInstance().getImplByClass(abstractionClass);
                         if (implClass == null)
                             throw new RuntimeException("Could not find impl class for " + abstractionClass);
                     }

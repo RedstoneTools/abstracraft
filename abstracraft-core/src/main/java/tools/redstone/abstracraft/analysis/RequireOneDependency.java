@@ -1,6 +1,6 @@
 package tools.redstone.abstracraft.analysis;
 
-import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionProvider;
 
 import java.util.List;
 
@@ -9,7 +9,7 @@ import java.util.List;
  */
 public record RequireOneDependency(List<ReferenceDependency> dependencies, List<ReferenceDependency> optionalDependencies, boolean implemented) implements Dependency {
     @Override
-    public boolean isImplemented(AbstractionManager manager) {
+    public boolean isImplemented(AbstractionProvider manager) {
         return this.implemented;
     }
 

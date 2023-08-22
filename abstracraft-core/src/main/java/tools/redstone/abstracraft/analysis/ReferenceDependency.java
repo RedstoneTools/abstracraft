@@ -1,6 +1,6 @@
 package tools.redstone.abstracraft.analysis;
 
-import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionProvider;
 
 /**
  * Represents the dependency of a piece of code on a specific method.
@@ -15,10 +15,10 @@ public record ReferenceDependency(
     }
 
     @Override
-    public boolean isImplemented(AbstractionManager abstractionManager) {
+    public boolean isImplemented(AbstractionProvider abstractionProvider) {
         if (implemented != null)
             return implemented;
-        return abstractionManager.isImplemented(info);
+        return abstractionProvider.isImplemented(info);
     }
 
     public String toString() {

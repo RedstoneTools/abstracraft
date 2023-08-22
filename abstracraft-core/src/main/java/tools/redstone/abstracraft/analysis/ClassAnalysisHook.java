@@ -1,7 +1,7 @@
 package tools.redstone.abstracraft.analysis;
 
 import org.objectweb.asm.Type;
-import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionProvider;
 import tools.redstone.abstracraft.util.asm.MethodWriter;
 
 /**
@@ -33,12 +33,12 @@ public interface ClassAnalysisHook {
         default boolean visitFieldInsn(AnalysisContext ctx, int opcode, ReferenceInfo fieldInfo) { return false; }
     }
 
-    // When this hook is registered to the given manager
-    default void onRegister(AbstractionManager manager) { }
+    // When this hook is registered to the given provider
+    default void onRegister(AbstractionProvider provider) { }
 
-    // When a class is newly loaded through the abstraction manager's
+    // When a class is newly loaded through the abstraction provider's
     // transforming class loader.
-    default void onClassLoad(AbstractionManager manager, Class<?> klass) { }
+    default void onClassLoad(AbstractionProvider provider, Class<?> klass) { }
 
     // When a method is referenced in a required block
     default ReferenceHook requiredReference(AnalysisContext context, ReferenceAnalysis called) { return null; }
@@ -59,6 +59,6 @@ public interface ClassAnalysisHook {
     default Boolean isDependencyCandidate(AnalysisContext context, ReferenceInfo ref) { return null; }
 
     // Dependency presence checks
-    default Boolean checkImplemented(AbstractionManager manager, ReferenceInfo ref) throws Throwable { return null; }
+    default Boolean checkImplemented(AbstractionProvider provider, ReferenceInfo ref) throws Throwable { return null; }
 
 }

@@ -5,7 +5,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.MethodNode;
-import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionProvider;
 import tools.redstone.abstracraft.analysis.*;
 import tools.redstone.abstracraft.util.asm.ASMUtil;
 import tools.redstone.abstracraft.util.asm.MethodWriter;
@@ -21,11 +21,11 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
 
     private final AdapterRegistry adapterRegistry;                               // The adapter registry to source adapters from
     private int adapterIdCounter = 0;                                            // The counter for the $$adapter_xx fields
-    private final AbstractionManager.ClassInheritanceChecker inheritanceChecker; // The inheritance checker to check for `adapt` calls
+    private final AbstractionProvider.ClassInheritanceChecker inheritanceChecker; // The inheritance checker to check for `adapt` calls
 
     public AdapterAnalysisHook(Class<?> adaptMethodOwner, AdapterRegistry adapterRegistry) {
         this.adapterRegistry = adapterRegistry;
-        inheritanceChecker = AbstractionManager.ClassInheritanceChecker.forClass(adaptMethodOwner);
+        inheritanceChecker = AbstractionProvider.ClassInheritanceChecker.forClass(adaptMethodOwner);
     }
 
     static class TrackedReturnValue {
@@ -45,7 +45,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
             @Override
             public boolean visitMethodInsn(AnalysisContext ctx, int opcode, ReferenceInfo info) {
                 // check for #adapt(Object)
-                if (inheritanceChecker.checkClassInherits(ctx.abstractionManager(), info.className()) && info.name().equals("adapt")) {
+                if (inheritanceChecker.checkClassInherits(ctx.abstractionProvider(), info.className()) && info.name().equals("adapt")) {
                     boolean isStatic = opcode == Opcodes.INVOKESTATIC;
                     Object instanceValue = isStatic ? context.currentComputeStack().pop() : null;
                     Object srcValue = context.currentComputeStack().pop();
@@ -54,7 +54,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                     // load the src class
                     Type srcAsmType = Type.getType(srcType);
                     if (srcAsmType.getSort() == Type.OBJECT)
-                        context.abstractionManager().findClass(srcAsmType.getClassName());
+                        context.abstractionProvider().findClass(srcAsmType.getClassName());
                     if (srcAsmType.getSort() == Type.METHOD)
                         srcType = srcAsmType.getReturnType().toString();
 
@@ -109,7 +109,7 @@ public class AdapterAnalysisHook implements ClassAnalysisHook {
                         // load the dst class
                         Type dstAsmType = Type.getType(dstType);
                         if (dstAsmType.getSort() == Type.OBJECT)
-                            context.abstractionManager().findClass(dstAsmType.getClassName());
+                            context.abstractionProvider().findClass(dstAsmType.getClassName());
 
                         // check if the adapter exists
                         if (adapterRegistry.findMonoDirectional(finalSrcType, dstType) == null)

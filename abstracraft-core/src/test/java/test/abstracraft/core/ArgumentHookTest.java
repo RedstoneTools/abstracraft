@@ -1,6 +1,6 @@
 package test.abstracraft.core;
 
-import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionProvider;
 import tools.redstone.abstracraft.analysis.*;
 import tools.redstone.abstracraft.usage.Abstraction;
 import tools.redstone.abstracraft.usage.Usage;
@@ -139,7 +139,7 @@ public class ArgumentHookTest {
     }
 
     @TestSystem.Test(testClass = "TestClass", abstractionImpl = "CommandContextImpl", hooks = {"ArgumentUsageHook"})
-    void test_ArgHook(ArgumentUsageHook hook, Tests tests, CommandContext ctx, AbstractionManager abstractionManager) {
+    void test_ArgHook(ArgumentUsageHook hook, Tests tests, CommandContext ctx, AbstractionProvider abstractionManager) {
         System.out.println(" ⚠ Exclude Argument fields: " + hook.excludeFields);
         // todo: write actual tests
         //  rn just manually review the output of println

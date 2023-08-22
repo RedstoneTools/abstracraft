@@ -2,6 +2,7 @@ package test.abstracraft.core;
 
 import org.junit.jupiter.api.Assertions;
 import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionProvider;
 import tools.redstone.abstracraft.usage.Abstraction;
 import tools.redstone.abstracraft.util.PackageWalker;
 import tools.redstone.abstracraft.util.ReflectUtil;
@@ -21,16 +22,16 @@ public class FindImplTest {
     void test_FindAndRegisterImpls() {
         ReflectUtil.ensureLoaded(A.class);
         ReflectUtil.ensureLoaded(B.class);
-        final AbstractionManager abstractionManager = new AbstractionManager();
-        abstractionManager.registerImplsFromResources(
+        final AbstractionProvider abstractionProvider = new AbstractionProvider(AbstractionManager.getInstance());
+        abstractionProvider.registerImplsFromResources(
                 new PackageWalker(this.getClass(), "test.abstracraft.core")
                 .findResources()
                 .filter(r -> r.trimmedName().endsWith("Impl"))
         );
 
         // check impls registered
-        Assertions.assertEquals(AImpl.class.getName(), abstractionManager.getImplByClass(A.class).getName());
-        Assertions.assertEquals(BImpl.class.getName(), abstractionManager.getImplByClass(B.class).getName());
+        Assertions.assertEquals(AImpl.class.getName(), abstractionProvider.getImplByClass(A.class).getName());
+        Assertions.assertEquals(BImpl.class.getName(), abstractionProvider.getImplByClass(B.class).getName());
     }
 
 }

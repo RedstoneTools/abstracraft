@@ -1,6 +1,6 @@
 package tools.redstone.abstracraft.analysis;
 
-import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionProvider;
 import tools.redstone.abstracraft.util.data.ExStack;
 
 import java.io.PrintStream;
@@ -11,7 +11,7 @@ public class AnalysisContext {
     /**
      * The abstraction manager.
      */
-    private final AbstractionManager abstractionManager;
+    private final AbstractionProvider abstractionProvider;
 
     /**
      * The trace of the methods being analyzed.
@@ -21,8 +21,8 @@ public class AnalysisContext {
     // The current compute stacks from the methods.
     final Stack<ExStack<Object>> computeStacks = new Stack<>();
 
-    public AnalysisContext(AbstractionManager abstractionManager) {
-        this.abstractionManager = abstractionManager;
+    public AnalysisContext(AbstractionProvider abstractionProvider) {
+        this.abstractionProvider = abstractionProvider;
     }
 
     // Leaves a method and updates the context to account for it
@@ -45,8 +45,8 @@ public class AnalysisContext {
         }
     }
 
-    public AbstractionManager abstractionManager() {
-        return abstractionManager;
+    public AbstractionProvider abstractionProvider() {
+        return abstractionProvider;
     }
 
     public ReferenceInfo currentMethod() {
@@ -59,7 +59,7 @@ public class AnalysisContext {
         var curr = currentMethod();
         if (curr == null)
             return null;
-        return abstractionManager.getReferenceAnalysis(curr);
+        return abstractionProvider.getReferenceAnalysis(curr);
     }
 
     /** Gets the current compute stack */

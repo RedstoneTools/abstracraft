@@ -4,6 +4,7 @@ import org.junit.jupiter.api.function.Executable;
 import org.opentest4j.AssertionFailedError;
 import tools.redstone.abstracraft.Abstracraft;
 import tools.redstone.abstracraft.AbstractionManager;
+import tools.redstone.abstracraft.AbstractionProvider;
 import tools.redstone.abstracraft.adapter.AdapterAnalysisHook;
 import tools.redstone.abstracraft.adapter.AdapterRegistry;
 import tools.redstone.abstracraft.analysis.Dependency;
@@ -29,27 +30,27 @@ import java.util.*;
  */
 public class TestSystem {
 
-    static final Field FIELD_Abstracraft_abstractionManager;
+    static final Field FIELD_Abstracraft_abstractionProvider;
 
     static {
         try {
-            FIELD_Abstracraft_abstractionManager = Abstracraft.class.getDeclaredField("manager");
-            FIELD_Abstracraft_abstractionManager.setAccessible(true);
+            FIELD_Abstracraft_abstractionProvider = Abstracraft.class.getDeclaredField("provider");
+            FIELD_Abstracraft_abstractionProvider.setAccessible(true);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
     }
 
-    public static AbstractionManager getGlobalAbstractionManager() {
+    public static AbstractionProvider getGlobalAbstractionProvider() {
         try {
-            return (AbstractionManager) FIELD_Abstracraft_abstractionManager.get(Abstracraft.getInstance());
+            return (AbstractionProvider) FIELD_Abstracraft_abstractionProvider.get(Abstracraft.getInstance());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     // Test interface
-    public record TestInterface(Class<?> rootClass, String testMethod, AbstractionManager abstractionManager) {
+    public record TestInterface(Class<?> rootClass, String testMethod, AbstractionProvider abstractionManager) {
         @SuppressWarnings("unchecked")
         public <T> T runTransformed(String cName, String mName, Object... args) {
             try {
@@ -134,18 +135,18 @@ public class TestSystem {
                 if (testAnnotation == null) continue;
                 method.setAccessible(true);
 
-                final AbstractionManager abstractionManager = testAnnotation.globalAbstractionManager() ?
+                final AbstractionProvider abstractionProvider = testAnnotation.globalAbstractionManager() ?
                         // use global abstraction manager
-                        getGlobalAbstractionManager() :
+                        getGlobalAbstractionProvider() :
                         // create new abstraction manager
-                        new AbstractionManager()
+                        new AbstractionProvider(AbstractionManager.getInstance())
                                 .setClassAuditPredicate(name -> name.startsWith(klass.getName()))
                                 .setRequiredMethodPredicate(m -> m.ref.name().startsWith("test"))
-                                .addAnalysisHook(AbstractionManager.excludeCallsOnSelfAsDependencies())
-                                .addAnalysisHook(AbstractionManager.checkDependenciesForInterface(Abstraction.class, testAnnotation.fieldDependencies()))
-                                .addAnalysisHook(AbstractionManager.checkForExplicitImplementation(Abstraction.class))
-                                .addAnalysisHook(AbstractionManager.checkStaticFieldsNotNull())
-                                .addAnalysisHook(AbstractionManager.autoRegisterLoadedImplClasses())
+                                .addAnalysisHook(AbstractionProvider.excludeCallsOnSelfAsDependencies())
+                                .addAnalysisHook(AbstractionProvider.checkDependenciesForInterface(Abstraction.class, testAnnotation.fieldDependencies()))
+                                .addAnalysisHook(AbstractionProvider.checkForExplicitImplementation(Abstraction.class))
+                                .addAnalysisHook(AbstractionProvider.checkStaticFieldsNotNull())
+                                .addAnalysisHook(AbstractionProvider.autoRegisterLoadedImplClasses())
                                 .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, AdapterRegistry.getInstance()));
 
                 // get test name
@@ -165,9 +166,9 @@ public class TestSystem {
                     if (hookClass == null || !ClassAnalysisHook.class.isAssignableFrom(hookClass))
                         throw new IllegalArgumentException("Couldn't find hook class by name " + abstractionImplName);
                     if (debug)
-                        System.out.println("DEBUG Test " + testName + ": Found hook " + hookClass);
+                        System.out.println("DEBUG test " + testName + ": Found hook " + hookClass);
                     Object hook = hookClass.getConstructor().newInstance();
-                    abstractionManager.addAnalysisHook((ClassAnalysisHook) hook);
+                    abstractionProvider.addAnalysisHook((ClassAnalysisHook) hook);
                     hooks.add(hook);
                 }
 
@@ -179,14 +180,14 @@ public class TestSystem {
                     if (implClass == null)
                         throw new IllegalArgumentException("Couldn't find implementation class by name " + abstractionImplName);
                     if (debug)
-                        System.out.println("DEBUG Test " + testName + ": Found abstraction impl " + implClass);
-                    abstractionManager.registerImpl(implClass);
+                        System.out.println("DEBUG test " + testName + ": Found abstraction impl " + implClass);
+                    abstractionProvider.abstractionManager().registerImpl(implClass);
                     implInstance = implClass.getConstructor().newInstance();
                 }
 
                 // auto register impls
                 if (testAnnotation.autoRegisterImpls()) {
-                    abstractionManager.registerImplsFromResources(
+                    abstractionProvider.registerImplsFromResources(
                             new PackageWalker(klass, klass.getPackageName())
                                 .findResources()
                                 .filter(r -> r.name().startsWith(klass.getSimpleName() + "$"))
@@ -200,18 +201,18 @@ public class TestSystem {
                 Class<?> testClass = null;
                 Object testInstance = null;
                 if (testClassName != null) {
-                    testClass = abstractionManager.findClass(testClassName);
+                    testClass = abstractionProvider.findClass(testClassName);
                     if (testClass == null)
                         throw new IllegalArgumentException("Couldn't find test class by name " + abstractionImplName);
                     if (debug)
-                        System.out.println("DEBUG Test " + testName + ": Found test " + implClass);
+                        System.out.println("DEBUG test " + testName + ": Found test " + implClass);
                     testInstance = testClass.getConstructor().newInstance();
                 }
 
                 long t3 = System.currentTimeMillis();
                 if (debug) System.out.println("DEBUG test " + testName + ": loading and transforming test class took " + (t3 - t2) + "ms");
 
-                TestInterface testInterface = new TestInterface(klass, method.getName(), abstractionManager);
+                TestInterface testInterface = new TestInterface(klass, method.getName(), abstractionProvider);
 
                 // order arguments
                 Object[] args = new Object[method.getParameterTypes().length];
@@ -220,7 +221,7 @@ public class TestSystem {
 
                     if (implClass != null && type.isAssignableFrom(implClass)) args[i] = implInstance;
                     else if (testClass != null && type.isAssignableFrom(testClass)) args[i] = testInstance;
-                    else if (type.isAssignableFrom(AbstractionManager.class)) args[i] = abstractionManager;
+                    else if (type.isAssignableFrom(AbstractionProvider.class)) args[i] = abstractionProvider;
                     else if (TestInterface.class == type) args[i] = testInterface;
                     else for (var hook : hooks) if (type.isAssignableFrom(hook.getClass())) args[i] = hook;
                 }
