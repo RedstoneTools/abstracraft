@@ -18,12 +18,14 @@ allprojects {
         mavenCentral()
         maven { url = "https://jitpack.io" }
     }
+
+    dependencies {
+
+    }
 }
 
 subprojects {
-    if (!plugins.hasPlugin("java"))
-        return
-
+    System.out.println("Configuring project " + it)
     tasks.withType(Test) {
         useJUnitPlatform()
     }
@@ -32,13 +34,13 @@ subprojects {
     apply plugin: 'maven-publish'
     apply plugin: 'java-library'
 
-    task("install") {
-        dependsOn()
-    }
-
     java {
         withSourcesJar()
         withJavadocJar()
+    }
+
+    task("install") {
+        dependsOn(tasks.getByName("publishToMavenLocal"))
     }
 
     afterEvaluate {
@@ -51,6 +53,14 @@ subprojects {
                     from components.java
                 }
             }
+        }
+    }
+}
+
+afterEvaluate {
+    task("install") {
+        for (Project p : subprojects) {
+            dependsOn(p.tasks.getByName("install"))
         }
     }
 }
