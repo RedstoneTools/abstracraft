@@ -1,1 +1,56 @@
 group 'tools.redstone'
+
+allprojects {
+    buildscript {
+        repositories {
+            maven { url = 'https://maven.minecraftforge.net' }
+            maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+            maven { url = 'https://plugins.gradle.org/m2/' }
+            maven { url = 'https://jitpack.io' }
+            mavenCentral()
+        }
+    }
+
+    version = "1.0"
+    group = 'tools.redstone.abstracraft'
+
+    project.repositories {
+        mavenCentral()
+        maven { url = "https://jitpack.io" }
+    }
+}
+
+subprojects {
+    if (!plugins.hasPlugin("java"))
+        return
+
+    tasks.withType(Test) {
+        useJUnitPlatform()
+    }
+
+    // Configure JitPack publishing
+    apply plugin: 'maven-publish'
+    apply plugin: 'java-library'
+
+    task("install") {
+        dependsOn()
+    }
+
+    java {
+        withSourcesJar()
+        withJavadocJar()
+    }
+
+    afterEvaluate {
+        publishing {
+            publications {
+                maven(MavenPublication) {
+                    groupId project.group
+                    artifactId project.name
+                    version project.version
+                    from components.java
+                }
+            }
+        }
+    }
+}
