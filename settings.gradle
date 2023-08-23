@@ -12,8 +12,12 @@ rootProject.name = "abstracraft"
 include ":abstracraft-core"
 include ":abstracraft-math"
 include ":abstracraft-abstractions"
-include ":abstracraft-implementations"
-include ":abstracraft-implementations:abstracraft-1.18.2"
-include ":abstracraft-implementations:abstracraft-1.18.2:common"
-include ":abstracraft-implementations:abstracraft-1.18.2:fabric"
-include ":abstracraft-implementations:abstracraft-1.18.2:forge"
+
+// we dont want jitpack to spend time configuring/building implementations
+if (!System.env.JITPACK) {
+    include ":abstracraft-implementations"
+    include ":abstracraft-implementations:abstracraft-1.18.2"
+    include ":abstracraft-implementations:abstracraft-1.18.2:common"
+    include ":abstracraft-implementations:abstracraft-1.18.2:fabric"
+    include ":abstracraft-implementations:abstracraft-1.18.2:forge"
+}
