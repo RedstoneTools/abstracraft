@@ -45,6 +45,9 @@ subprojects {
         useJUnitPlatform()
     }
 
+    sourceCompatibility = 17 // java 17
+    targetCompatibility = 17
+
     java {
         withSourcesJar()
         withJavadocJar()
