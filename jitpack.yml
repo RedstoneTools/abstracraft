@@ -1,5 +1,4 @@
 jdk:
   - openjdk17
-install:
-  - echo "[!] Building redstonetools/abstracraft"
-  - /home/jitpack/build/gradlew clean install --stacktrace --debug
+build:
+  - ./gradlew clean install --stacktrace --debug
