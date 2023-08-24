@@ -1,6 +1,6 @@
 package tools.redstone.abstracraft.entity;
 
-import tools.redstone.abstracraft.usage.Abstraction;
+import tools.redstone.picasso.usage.Abstraction;
 
 import java.util.UUID;
 

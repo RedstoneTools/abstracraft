@@ -1,11 +1,13 @@
 package tools.redstone.abstracraft;
 
-import tools.redstone.abstracraft.adapter.Adapter;
-import tools.redstone.abstracraft.adapter.AdapterAnalysisHook;
-import tools.redstone.abstracraft.analysis.ClassAnalysisHook;
-import tools.redstone.abstracraft.usage.Abstraction;
-import tools.redstone.abstracraft.util.PackageWalker;
-import tools.redstone.abstracraft.adapter.AdapterRegistry;
+import tools.redstone.picasso.AbstractionManager;
+import tools.redstone.picasso.AbstractionProvider;
+import tools.redstone.picasso.adapter.Adapter;
+import tools.redstone.picasso.adapter.AdapterAnalysisHook;
+import tools.redstone.picasso.analysis.ClassAnalysisHook;
+import tools.redstone.picasso.usage.Abstraction;
+import tools.redstone.picasso.util.PackageWalker;
+import tools.redstone.picasso.adapter.AdapterRegistry;
 
 import java.util.ArrayList;
 import java.util.List;
