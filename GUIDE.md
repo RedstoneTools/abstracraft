@@ -1,5 +1,5 @@
 ## How to use abstracraft in a feature
-Abstracraft provides abstractions for Minecraft features powered by the `abstracraft-core` module. 
+Abstracraft provides abstractions for Minecraft features powered by the ['picasso'](https://github.com/RedstoneTools/picasso) project. 
 It provides a way to cleanly use abstractions which may change across versions
 without any runtime checks. Internally it utilizes bytecode analysis/transformation.
 
@@ -25,7 +25,7 @@ from being loaded and available to the user.
 **Example:**
 Say you have a feature class `MyFeature`.
 ```java
-import static tools.redstone.abstracraft.usage.Usage.*;
+import static tools.redstone.picasso.usage.Usage.*;
 
 public class MyFeature extends CommandFeature {
     // Called when executing the command associated
