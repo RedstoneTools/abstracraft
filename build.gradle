@@ -1,3 +1,5 @@
+apply plugin: 'maven-publish'
+
 group 'tools.redstone'
 
 allprojects {
@@ -24,15 +26,24 @@ allprojects {
     }
 }
 
+afterEvaluate {
+    tasks.getByName("publishToMavenLocal") {
+        for (Project proj : subprojects) {
+            dependsOn(proj.tasks.getByName("publishToMavenLocal"))
+        }
+    }
+}
+
 subprojects {
-    System.out.println("Configuring project " + it)
+    System.out.println("*configuring " + it)
+
+    apply plugin: 'java'
+    apply plugin: 'maven-publish'
+    apply plugin: 'java-library'
+
     tasks.withType(Test) {
         useJUnitPlatform()
     }
-
-    // Configure JitPack publishing
-    apply plugin: 'maven-publish'
-    apply plugin: 'java-library'
 
     java {
         withSourcesJar()

@@ -1,4 +1,3 @@
-jdk:
-  - openjdk17
-build:
-  - ./gradlew clean install --stacktrace --debug
+before_install:
+  - sdk install java 17-zulu
+  - sdk use java 17-zulu
