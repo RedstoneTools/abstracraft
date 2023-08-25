@@ -1,8 +1,5 @@
 package tools.redstone.abstracraft.registry;
 
-import tools.redstone.picasso.registry.Keyed;
-import tools.redstone.picasso.registry.Registry;
-
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -21,20 +18,20 @@ public class KeyedRegistry<K, V extends Keyed<K>> implements Registry<K, V> {
         this.map = map;
     }
 
-    public static <K, V extends Keyed<K>> tools.redstone.picasso.registry.KeyedRegistry<K, V> ordered(Class<? super V> vClass) {
-        return new tools.redstone.picasso.registry.KeyedRegistry<>(vClass, new LinkedHashMap<>());
+    public static <K, V extends Keyed<K>> KeyedRegistry<K, V> ordered(Class<? super V> vClass) {
+        return new KeyedRegistry<>(vClass, new LinkedHashMap<>());
     }
 
-    public static <K, V extends Keyed<K>> tools.redstone.picasso.registry.KeyedRegistry<K, V> ordered(Class<? super V> vClass, int initSize) {
-        return new tools.redstone.picasso.registry.KeyedRegistry<>(vClass, new LinkedHashMap<>(initSize));
+    public static <K, V extends Keyed<K>> KeyedRegistry<K, V> ordered(Class<? super V> vClass, int initSize) {
+        return new KeyedRegistry<>(vClass, new LinkedHashMap<>(initSize));
     }
 
-    public static <K, V extends Keyed<K>> tools.redstone.picasso.registry.KeyedRegistry<K, V> unordered(Class<? super V> vClass) {
-        return new tools.redstone.picasso.registry.KeyedRegistry<>(vClass, new HashMap<>());
+    public static <K, V extends Keyed<K>> KeyedRegistry<K, V> unordered(Class<? super V> vClass) {
+        return new KeyedRegistry<>(vClass, new HashMap<>());
     }
 
-    public static <K, V extends Keyed<K>> tools.redstone.picasso.registry.KeyedRegistry<K, V> unordered(Class<? super V> vClass, int initSize) {
-        return new tools.redstone.picasso.registry.KeyedRegistry<>(vClass, new HashMap<>(initSize));
+    public static <K, V extends Keyed<K>> KeyedRegistry<K, V> unordered(Class<? super V> vClass, int initSize) {
+        return new KeyedRegistry<>(vClass, new HashMap<>(initSize));
     }
 
     @Override

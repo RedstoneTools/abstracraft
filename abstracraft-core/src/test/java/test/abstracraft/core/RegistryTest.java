@@ -1,8 +1,8 @@
 package test.abstracraft.core;
 
 import org.junit.jupiter.api.Test;
-import tools.redstone.picasso.registry.Keyed;
-import tools.redstone.picasso.registry.KeyedRegistry;
+import tools.redstone.abstracraft.registry.Keyed;
+import tools.redstone.abstracraft.registry.KeyedRegistry;
 
 public class RegistryTest {
 
