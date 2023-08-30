@@ -107,7 +107,7 @@ public class Abstracraft {
      */
     public void findAndRegisterImplementations() {
         for (var finder : implFinders) {
-            provider.registerImplsFromResources(finder.findResources(provider));
+            finder.findResources(provider).forEach(provider::loadAndRegisterImpl);
         }
     }
 
