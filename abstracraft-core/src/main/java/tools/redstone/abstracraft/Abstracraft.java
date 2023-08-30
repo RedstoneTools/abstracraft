@@ -22,6 +22,7 @@ import java.util.stream.Stream;
  * the core is reusable in other projects.
  */
 public class Abstracraft {
+    private Abstracraft() { }
 
     // Finds implementation classes as resources
     public interface ImplFinder {
