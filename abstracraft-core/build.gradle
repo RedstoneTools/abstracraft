@@ -7,7 +7,7 @@ dependencies {
     implementation 'org.ow2.asm:asm-tree:9.4'
     implementation 'org.ow2.asm:asm-util:9.5'
 
-    api 'com.github.redstonetools:picasso:main-SHAPSHOT' // API driver
+    api 'com.github.RedstoneTools:picasso:main-SHAPSHOT' // API driver
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
