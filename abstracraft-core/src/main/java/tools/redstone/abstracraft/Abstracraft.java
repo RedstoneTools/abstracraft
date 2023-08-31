@@ -4,6 +4,7 @@ import tools.redstone.picasso.AbstractionManager;
 import tools.redstone.picasso.AbstractionProvider;
 import tools.redstone.picasso.adapter.Adapter;
 import tools.redstone.picasso.adapter.AdapterAnalysisHook;
+import tools.redstone.picasso.adapter.DynamicAdapterRegistry;
 import tools.redstone.picasso.analysis.ClassAnalysisHook;
 import tools.redstone.picasso.usage.Abstraction;
 import tools.redstone.picasso.util.PackageWalker;
@@ -46,6 +47,11 @@ public class Abstracraft {
     private final AbstractionManager manager = AbstractionManager.getInstance();
 
     /**
+     * The adapter registry.
+     */
+    private final AdapterRegistry adapterRegistry = new DynamicAdapterRegistry();
+
+    /**
      * The abstraction provider.
      */
     private final AbstractionProvider provider = manager.createProvider()
@@ -54,7 +60,7 @@ public class Abstracraft {
             .addAnalysisHook(AbstractionProvider.checkStaticFieldsNotNull())
             .addAnalysisHook(AbstractionProvider.checkForExplicitImplementation(Abstraction.class))
             .addAnalysisHook(AbstractionProvider.autoRegisterLoadedImplClasses())
-            .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, getAdapterRegistry()));
+            .addAnalysisHook(new AdapterAnalysisHook(Abstraction.class, adapterRegistry));
 
     // The packages to find implementation classes to
     // register from
@@ -77,7 +83,7 @@ public class Abstracraft {
      * @return The adapter registry.
      */
     public AdapterRegistry getAdapterRegistry() {
-        return AdapterRegistry.getInstance();
+        return adapterRegistry;
     }
 
     public void registerAdapter(Adapter<?, ?> adapter) {
@@ -126,6 +132,27 @@ public class Abstracraft {
     @SuppressWarnings("unchecked")
     public <A> Class<? extends A> getImplementationClass(Class<A> abstraction) {
         return (Class<? extends A>) manager.getImplByClass(abstraction);
+    }
+
+    /**
+     * Adapt the given value of type A to a class of type B
+     * using the adapter registry.
+     *
+     * @param value The value to adapt.
+     * @param bClass The destination class.
+     * @param <A> The source value type.
+     * @param <B> The destination value type.
+     * @return The destination value.
+     */
+    @SuppressWarnings("unchecked")
+    public static <A, B> B adapt(A value, Class<B> bClass) {
+        if (value == null)
+            return null;
+        var func = INSTANCE.adapterRegistry
+                .findAdapterFunction(value.getClass(), bClass);
+        if (func == null)
+            throw new IllegalArgumentException("No adapter function for " + value.getClass() + " -> " + bClass);
+        return (B) func.adapt(value);
     }
 
 }
